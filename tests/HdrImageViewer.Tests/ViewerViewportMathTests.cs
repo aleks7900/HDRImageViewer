@@ -155,6 +155,13 @@ public sealed class ViewerViewportMathTests
     }
 
     [Fact]
+    public void ImageFitsInPreview_DetectsLetterboxedAndCoveringStates()
+    {
+        Assert.True(ViewerViewportMath.ImageFitsInPreview(800, 600, 1000, 600));
+        Assert.False(ViewerViewportMath.ImageFitsInPreview(1600, 1200, 1000, 600));
+    }
+
+    [Fact]
     public void CalculateZoomPreviewScale_UsesPresentedImageWidth()
     {
         Assert.Equal(1.25, ViewerViewportMath.CalculateZoomPreviewScale(800, 1000), 6);

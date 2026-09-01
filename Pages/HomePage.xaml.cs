@@ -1132,7 +1132,10 @@ public sealed partial class HomePage : Page
 
     private async void HdrSwapChainHost_SizeChanged(object sender, SizeChangedEventArgs e)
     {
-        if (_isZoomCommitInProgress || _suppressSwapChainSizeChangedForZoom || _isZoomPreviewActive)
+        if (_isZoomCommitInProgress
+            || _suppressSwapChainSizeChangedForZoom
+            || _isZoomPreviewActive
+            || _isUpdatingSwapChainHostLayout)
         {
             return;
         }
@@ -1148,7 +1151,7 @@ public sealed partial class HomePage : Page
         UpdateFilmstripChromeLayout();
         UpdateImageSurfaceLayout();
         CenterScrollableImage();
-        if (_isZoomPreviewActive)
+        if (_isZoomPreviewActive || _isUpdatingSwapChainHostLayout)
         {
             return;
         }
@@ -1160,7 +1163,7 @@ public sealed partial class HomePage : Page
 
     private async void HdrSwapChainHost_CompositionScaleChanged(SwapChainPanel sender, object args)
     {
-        if (_isZoomPreviewActive)
+        if (_isZoomPreviewActive || _isUpdatingSwapChainHostLayout)
         {
             return;
         }
@@ -2460,6 +2463,11 @@ public sealed partial class HomePage : Page
             Rect = new Windows.Foundation.Rect(0.0, 0.0, ImageSurface.Width, ImageSurface.Height)
         };
         ImageSurface.UpdateLayout();
+        if (!_isZoomPreviewActive)
+        {
+            ApplySwapChainHostPlacement(targetWidth, targetHeight);
+        }
+
         return changed;
     }
 

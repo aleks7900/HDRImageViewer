@@ -14,6 +14,7 @@ public sealed partial class HomePage
     private bool _viewportPresentInFlight;
     private bool _viewportPresentDirty;
     private bool _isZoomPreviewActive;
+    private bool _isUpdatingSwapChainHostLayout;
     private double _presentedImageWidth;
     private double _presentedImageHeight;
 
@@ -81,7 +82,13 @@ public sealed partial class HomePage
             do
             {
                 _viewportPresentDirty = false;
-                if (!TryCreateRenderViewport(out var viewport))
+                if (!TryGetCurrentImageSize(out var imageWidth, out var imageHeight))
+                {
+                    return;
+                }
+
+                ApplySwapChainHostPlacement(imageWidth, imageHeight);
+                if (!TryCreateRenderViewport(imageWidth, imageHeight, out var viewport))
                 {
                     return;
                 }
@@ -112,7 +119,24 @@ public sealed partial class HomePage
         }
     }
 
-    private bool TryCreateRenderViewport(out HdrRenderViewport viewport)
+    private bool TryGetCurrentImageSize(out double imageWidth, out double imageHeight)
+    {
+        imageWidth = ImageSurface.Width > 0.0 ? ImageSurface.Width : 0.0;
+        imageHeight = ImageSurface.Height > 0.0 ? ImageSurface.Height : 0.0;
+        if (imageWidth >= MinimumSwapChainPixels && imageHeight >= MinimumSwapChainPixels)
+        {
+            return true;
+        }
+
+        imageWidth = PreviewSurface.ActualWidth;
+        imageHeight = PreviewSurface.ActualHeight;
+        return imageWidth >= MinimumSwapChainPixels && imageHeight >= MinimumSwapChainPixels;
+    }
+
+    private bool TryCreateRenderViewport(
+        double imageWidth,
+        double imageHeight,
+        out HdrRenderViewport viewport)
     {
         viewport = default;
         if (HdrSwapChainHost.Visibility != Visibility.Visible
@@ -122,18 +146,38 @@ public sealed partial class HomePage
             return false;
         }
 
-        var (pixelWidth, pixelHeight) = ViewerViewportMath.CalculateSwapChainPixelSize(
+        var compositionScaleX = HdrSwapChainHost.CompositionScaleX;
+        var compositionScaleY = HdrSwapChainHost.CompositionScaleY;
+        if (ViewerViewportMath.ImageFitsInPreview(
+            imageWidth,
+            imageHeight,
+            PreviewSurface.ActualWidth,
+            PreviewSurface.ActualHeight))
+        {
+            var (pixelWidth, pixelHeight) = ViewerViewportMath.CalculateSwapChainPixelSize(
+                imageWidth,
+                imageHeight,
+                compositionScaleX,
+                compositionScaleY);
+            if (pixelWidth < MinimumSwapChainPixels || pixelHeight < MinimumSwapChainPixels)
+            {
+                return false;
+            }
+
+            viewport = new HdrRenderViewport(pixelWidth, pixelHeight, 1.0f, 1.0f, 0.0f, 0.0f);
+            return viewport.IsValid;
+        }
+
+        var (coverWidth, coverHeight) = ViewerViewportMath.CalculateSwapChainPixelSize(
             PreviewSurface.ActualWidth,
             PreviewSurface.ActualHeight,
-            HdrSwapChainHost.CompositionScaleX,
-            HdrSwapChainHost.CompositionScaleY);
-        if (pixelWidth < MinimumSwapChainPixels || pixelHeight < MinimumSwapChainPixels)
+            compositionScaleX,
+            compositionScaleY);
+        if (coverWidth < MinimumSwapChainPixels || coverHeight < MinimumSwapChainPixels)
         {
             return false;
         }
 
-        var imageWidth = ImageSurface.Width > 0.0 ? ImageSurface.Width : PreviewSurface.ActualWidth;
-        var imageHeight = ImageSurface.Height > 0.0 ? ImageSurface.Height : PreviewSurface.ActualHeight;
         var contentWidth = ImageViewport.Width > 0.0
             ? ImageViewport.Width
             : Math.Max(PreviewSurface.ActualWidth, imageWidth);
@@ -155,13 +199,50 @@ public sealed partial class HomePage
         }
 
         viewport = new HdrRenderViewport(
-            pixelWidth,
-            pixelHeight,
+            coverWidth,
+            coverHeight,
             layout.ScaleX,
             layout.ScaleY,
             layout.OffsetX,
             layout.OffsetY);
         return viewport.IsValid;
+    }
+
+    private void ApplySwapChainHostPlacement(double imageWidth, double imageHeight)
+    {
+        if (imageWidth < MinimumSwapChainPixels || imageHeight < MinimumSwapChainPixels)
+        {
+            return;
+        }
+
+        _isUpdatingSwapChainHostLayout = true;
+        try
+        {
+            if (ViewerViewportMath.ImageFitsInPreview(
+                imageWidth,
+                imageHeight,
+                PreviewSurface.ActualWidth,
+                PreviewSurface.ActualHeight))
+            {
+                HdrSwapChainHost.HorizontalAlignment = HorizontalAlignment.Center;
+                HdrSwapChainHost.VerticalAlignment = VerticalAlignment.Center;
+                HdrSwapChainHost.Width = imageWidth;
+                HdrSwapChainHost.Height = imageHeight;
+            }
+            else
+            {
+                HdrSwapChainHost.HorizontalAlignment = HorizontalAlignment.Stretch;
+                HdrSwapChainHost.VerticalAlignment = VerticalAlignment.Stretch;
+                HdrSwapChainHost.ClearValue(FrameworkElement.WidthProperty);
+                HdrSwapChainHost.ClearValue(FrameworkElement.HeightProperty);
+            }
+
+            HdrSwapChainHost.UpdateLayout();
+        }
+        finally
+        {
+            _isUpdatingSwapChainHostLayout = false;
+        }
     }
 
     private void ShowHdrSwapChainHost()
@@ -201,6 +282,18 @@ public sealed partial class HomePage
             return;
         }
 
+        if (ViewerViewportMath.ImageFitsInPreview(
+            targetImageWidth,
+            targetImageHeight,
+            PreviewSurface.ActualWidth,
+            PreviewSurface.ActualHeight))
+        {
+            ClearSwapChainZoomPreviewTransform();
+            ApplySwapChainHostPlacement(targetImageWidth, targetImageHeight);
+            return;
+        }
+
+        ApplySwapChainHostPlacement(_presentedImageWidth, _presentedImageHeight);
         var scaleX = ViewerViewportMath.CalculateZoomPreviewScale(_presentedImageWidth, targetImageWidth);
         var scaleY = ViewerViewportMath.CalculateZoomPreviewScale(_presentedImageHeight, targetImageHeight);
         var scale = (scaleX + scaleY) * 0.5;
