@@ -15,6 +15,7 @@ public sealed partial class HomePage
     private bool _viewportPresentDirty;
     private bool _isZoomPreviewActive;
     private bool _isUpdatingSwapChainHostLayout;
+    private bool _swapChainHostContained;
     private double _presentedImageWidth;
     private double _presentedImageHeight;
     private double? _layoutScrollX;
@@ -40,12 +41,13 @@ public sealed partial class HomePage
 
     private void ImageScroller_ViewChanged(object sender, ScrollViewerViewChangedEventArgs e)
     {
-        if (!_isZoomPreviewActive && !e.IsIntermediate)
+        if (!_isZoomPreviewActive && !_isPanning && !e.IsIntermediate)
         {
             ClearLayoutScrollOverride();
         }
 
         if (_isZoomPreviewActive
+            || _isPanning
             || !ViewModel.HasImage
             || HdrSwapChainHost.Visibility != Visibility.Visible)
         {
@@ -222,14 +224,28 @@ public sealed partial class HomePage
             return;
         }
 
+        var contain = ViewerViewportMath.ImageFitsInPreview(
+            imageWidth,
+            imageHeight,
+            PreviewSurface.ActualWidth,
+            PreviewSurface.ActualHeight);
+        if (contain
+            && _swapChainHostContained
+            && Math.Abs(HdrSwapChainHost.Width - imageWidth) <= 0.5
+            && Math.Abs(HdrSwapChainHost.Height - imageHeight) <= 0.5)
+        {
+            return;
+        }
+
+        if (!contain && !_swapChainHostContained)
+        {
+            return;
+        }
+
         _isUpdatingSwapChainHostLayout = true;
         try
         {
-            if (ViewerViewportMath.ImageFitsInPreview(
-                imageWidth,
-                imageHeight,
-                PreviewSurface.ActualWidth,
-                PreviewSurface.ActualHeight))
+            if (contain)
             {
                 HdrSwapChainHost.HorizontalAlignment = HorizontalAlignment.Center;
                 HdrSwapChainHost.VerticalAlignment = VerticalAlignment.Center;
@@ -244,6 +260,7 @@ public sealed partial class HomePage
                 HdrSwapChainHost.ClearValue(FrameworkElement.HeightProperty);
             }
 
+            _swapChainHostContained = contain;
             HdrSwapChainHost.UpdateLayout();
         }
         finally

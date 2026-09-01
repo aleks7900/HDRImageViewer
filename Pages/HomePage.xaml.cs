@@ -1421,9 +1421,13 @@ public sealed partial class HomePage : Page
         var point = e.GetCurrentPoint(PreviewSurface);
         var deltaX = _panStartPointerPosition.X - point.Position.X;
         var deltaY = _panStartPointerPosition.Y - point.Position.Y;
-        var newOffsetX = Math.Clamp(_panStartScrollOffsetX + deltaX, 0.0, ImageScroller.ScrollableWidth);
-        var newOffsetY = Math.Clamp(_panStartScrollOffsetY + deltaY, 0.0, ImageScroller.ScrollableHeight);
+        var maxScrollX = Math.Max(0.0, ImageViewport.Width - PreviewSurface.ActualWidth);
+        var maxScrollY = Math.Max(0.0, ImageViewport.Height - PreviewSurface.ActualHeight);
+        var newOffsetX = Math.Clamp(_panStartScrollOffsetX + deltaX, 0.0, maxScrollX);
+        var newOffsetY = Math.Clamp(_panStartScrollOffsetY + deltaY, 0.0, maxScrollY);
+        SetLayoutScrollOverride(newOffsetX, newOffsetY);
         ImageScroller.ChangeView(newOffsetX, newOffsetY, null, disableAnimation: true);
+        _ = PresentViewportAsync(_lifetime.Token);
         e.Handled = true;
     }
 
@@ -1446,6 +1450,7 @@ public sealed partial class HomePage : Page
 
         _isPanning = false;
         PreviewSurface.ReleasePointerCapture(e.Pointer);
+        _ = PresentViewportAsync(_lifetime.Token);
         e.Handled = true;
     }
 

@@ -6,6 +6,7 @@
 - Restored follow-the-finger zoom: wheel, pinch, and zoom buttons scale the current HDR frame around the pointer, then re-render the sharp crop after the gesture settles.
 - When the image is smaller than the window, the HDR surface is centered at image size so the canvas keeps the page background instead of turning black.
 - Zoom no longer scales the SwapChainPanel with a XAML transform; covering zooms update ImageLayout from the intended scroll offset so the frame does not clip to black or flash on commit.
+- Dragging a zoomed image now redraws ImageLayout on each pointer move so the HDR frame follows the cursor instead of waiting for a coalesced scroll event.
 - Cached DXGI/EDID display capability per monitor so zoom and slider updates do not re-enumerate adapters.
 - Wired `FolderImageIndexCache` into folder navigation and removed the leftover per-image forced Gen-2 GC.
 - Shared adjacent-image preloads now cancel through `SharedAsyncOperation` instead of the first caller's token.
