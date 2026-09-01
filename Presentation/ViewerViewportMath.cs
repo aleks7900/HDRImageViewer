@@ -143,6 +143,53 @@ internal static class ViewerViewportMath
             Math.Clamp(anchorViewportY / previewHeight, 0.0, 1.0));
     }
 
+    public static ViewerSwapChainHostLayout CalculateSwapChainHostLayout(
+        double previewWidth,
+        double previewHeight,
+        double imageWidth,
+        double imageHeight,
+        double contentWidth,
+        double contentHeight,
+        double scrollX,
+        double scrollY)
+    {
+        if (previewWidth <= 0.0
+            || previewHeight <= 0.0
+            || imageWidth <= 0.0
+            || imageHeight <= 0.0)
+        {
+            return ViewerSwapChainHostLayout.Invalid;
+        }
+
+        var imageLeft = Math.Max(0.0, (contentWidth - imageWidth) / 2.0);
+        var imageTop = Math.Max(0.0, (contentHeight - imageHeight) / 2.0);
+        var visibleLeft = Math.Max(scrollX, imageLeft);
+        var visibleTop = Math.Max(scrollY, imageTop);
+        var visibleRight = Math.Min(scrollX + previewWidth, imageLeft + imageWidth);
+        var visibleBottom = Math.Min(scrollY + previewHeight, imageTop + imageHeight);
+        var hostWidth = visibleRight - visibleLeft;
+        var hostHeight = visibleBottom - visibleTop;
+        if (hostWidth < 2.0 || hostHeight < 2.0)
+        {
+            hostWidth = Math.Min(imageWidth, previewWidth);
+            hostHeight = Math.Min(imageHeight, previewHeight);
+            if (hostWidth < 2.0 || hostHeight < 2.0)
+            {
+                return ViewerSwapChainHostLayout.Invalid;
+            }
+
+            return new ViewerSwapChainHostLayout(hostWidth, hostHeight, 1.0f, 1.0f, 0.0f, 0.0f);
+        }
+
+        return new ViewerSwapChainHostLayout(
+            hostWidth,
+            hostHeight,
+            (float)(imageWidth / hostWidth),
+            (float)(imageHeight / hostHeight),
+            (float)((imageLeft - visibleLeft) / hostWidth),
+            (float)((imageTop - visibleTop) / hostHeight));
+    }
+
     public static ViewerVisibleImageLayout CalculateVisibleImageLayout(
         double previewWidth,
         double previewHeight,
@@ -169,6 +216,31 @@ internal static class ViewerViewportMath
             (float)((imageLeft - scrollX) / previewWidth),
             (float)((imageTop - scrollY) / previewHeight));
     }
+}
+
+internal readonly record struct ViewerSwapChainHostLayout(
+    double HostWidth,
+    double HostHeight,
+    float ScaleX,
+    float ScaleY,
+    float OffsetX,
+    float OffsetY)
+{
+    public static ViewerSwapChainHostLayout Invalid { get; } = new(0.0, 0.0, 1.0f, 1.0f, 0.0f, 0.0f);
+
+    public bool IsValid =>
+        HostWidth >= 2.0
+        && HostHeight >= 2.0
+        && float.IsFinite(ScaleX)
+        && float.IsFinite(ScaleY)
+        && ScaleX > 0.0f
+        && ScaleY > 0.0f
+        && float.IsFinite(OffsetX)
+        && float.IsFinite(OffsetY);
+
+    public bool CoversPreview(double previewWidth, double previewHeight) =>
+        HostWidth >= previewWidth - 0.5
+        && HostHeight >= previewHeight - 0.5;
 }
 
 internal readonly record struct ViewerVisibleImageLayout(
