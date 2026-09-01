@@ -31,27 +31,13 @@ public static class PhotoThumbnailService
         cancellationToken.ThrowIfCancellationRequested();
         try
         {
-            var loadResult = await ImageDocumentLoader.LoadAsync(path, cancellationToken);
-            if (loadResult.Document.HasRenderableGainMap)
-            {
-                var inputs = await DecodeGainMapThumbnailInputsAsync(
-                    loadResult.Document,
-                    checked((int)Math.Min(maxPixelSize, int.MaxValue)),
-                    cancellationToken);
-                return await CreateToneMappedThumbnailAsync(inputs, cancellationToken);
-            }
-
-            if (IsHdrThumbnailSource(loadResult.Document))
-            {
-                var bitmap = await BitmapDecodeService.DecodeDocumentForThumbnailAsync(
-                    loadResult.Document,
-                    checked((int)Math.Min(maxPixelSize, int.MaxValue)),
-                    cancellationToken);
-                if (bitmap.IsHdrEncoded)
-                {
-                    return await CreateToneMappedThumbnailAsync(bitmap, cancellationToken);
-                }
-            }
+            var loadResult = await ImagePreloadCache.GetLoadResultAsync(
+                path,
+                cancellationToken);
+            return await CreateHdrToneMappedAsync(
+                loadResult,
+                maxPixelSize,
+                cancellationToken);
         }
         catch (OperationCanceledException)
         {
@@ -59,6 +45,35 @@ public static class PhotoThumbnailService
         }
         catch
         {
+            return null;
+        }
+    }
+
+    internal static async Task<ImageSource?> CreateHdrToneMappedAsync(
+        ImageLoadResult loadResult,
+        uint maxPixelSize,
+        CancellationToken cancellationToken)
+    {
+        var document = loadResult.Document;
+        if (document.HasRenderableGainMap)
+        {
+            var inputs = await DecodeGainMapThumbnailInputsAsync(
+                document,
+                checked((int)Math.Min(maxPixelSize, int.MaxValue)),
+                cancellationToken);
+            return await CreateToneMappedThumbnailAsync(inputs, cancellationToken);
+        }
+
+        if (IsHdrThumbnailSource(document))
+        {
+            var bitmap = await BitmapDecodeService.DecodeDocumentForThumbnailAsync(
+                document,
+                checked((int)Math.Min(maxPixelSize, int.MaxValue)),
+                cancellationToken);
+            if (bitmap.IsHdrEncoded)
+            {
+                return await CreateToneMappedThumbnailAsync(bitmap, cancellationToken);
+            }
         }
 
         return null;

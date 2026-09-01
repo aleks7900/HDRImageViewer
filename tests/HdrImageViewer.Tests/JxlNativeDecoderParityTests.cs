@@ -1,6 +1,4 @@
-using System.Globalization;
 using System.Runtime.InteropServices;
-using System.Text;
 using HdrImageViewer.Services;
 using Xunit;
 
@@ -97,7 +95,13 @@ public sealed class JxlNativeDecoderParityTests
             process.StartInfo.ArgumentList.Add("--bits_per_sample");
             process.StartInfo.ArgumentList.Add("16");
             await NativeProcessRunner.RunAsync(process, "libjxl djxl", CancellationToken.None);
-            return ReadPpm16AsRgba16(await File.ReadAllBytesAsync(ppmPath));
+            var bitmap = PortableImageReader.ReadPpmAsRgba16(
+                ppmPath,
+                decoderName: "djxl parity fixture",
+                DecodedBitmapTransfer.Pq,
+                usesBt2020Primaries: true,
+                CancellationToken.None);
+            return (bitmap.PixelWidth, bitmap.PixelHeight, bitmap.RgbaPixels);
         }
         finally
         {
@@ -109,57 +113,6 @@ public sealed class JxlNativeDecoderParityTests
             {
             }
         }
-    }
-
-    /// <summary>
-    /// Mirrors BitmapDecodeService.ReadPpmAsRgba16: big-endian PPM P6 samples
-    /// to little-endian RGBA16 with opaque alpha.
-    /// </summary>
-    private static (int Width, int Height, byte[] Rgba16Pixels) ReadPpm16AsRgba16(byte[] data)
-    {
-        var offset = 0;
-        var magic = ReadToken(data, ref offset);
-        Assert.Equal("P6", magic);
-        var width = int.Parse(ReadToken(data, ref offset), CultureInfo.InvariantCulture);
-        var height = int.Parse(ReadToken(data, ref offset), CultureInfo.InvariantCulture);
-        var maxValue = int.Parse(ReadToken(data, ref offset), CultureInfo.InvariantCulture);
-        Assert.Equal(65535, maxValue);
-        offset++; // single whitespace byte after the header
-
-        var pixels = new byte[checked(width * height * 8)];
-        var destination = 0;
-        for (var i = 0; i < width * height; i++)
-        {
-            for (var channel = 0; channel < 3; channel++)
-            {
-                pixels[destination] = data[offset + 1];
-                pixels[destination + 1] = data[offset];
-                offset += 2;
-                destination += 2;
-            }
-
-            pixels[destination] = 0xFF;
-            pixels[destination + 1] = 0xFF;
-            destination += 2;
-        }
-
-        return (width, height, pixels);
-    }
-
-    private static string ReadToken(byte[] data, ref int offset)
-    {
-        while (offset < data.Length && char.IsWhiteSpace((char)data[offset]))
-        {
-            offset++;
-        }
-
-        var start = offset;
-        while (offset < data.Length && !char.IsWhiteSpace((char)data[offset]))
-        {
-            offset++;
-        }
-
-        return Encoding.ASCII.GetString(data, start, offset - start);
     }
 
     private static List<string> FindJxlFixtures()

@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Numerics;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
@@ -5,7 +6,6 @@ using HdrImageViewer.Models;
 using HdrImageViewer.Services;
 using Microsoft.UI.Xaml.Controls;
 using SharpGen.Runtime;
-using Vortice.D3DCompiler;
 using Vortice.Direct2D1;
 using Vortice.Direct3D;
 using Vortice.Direct3D11;
@@ -23,7 +23,7 @@ using WicPixelFormat = Vortice.WIC.PixelFormat;
 
 namespace HdrImageViewer.Rendering;
 
-public sealed class D3D11HdrRenderPipeline : IHdrRenderPipeline, IDisposable
+public sealed partial class D3D11HdrRenderPipeline : IHdrRenderPipeline, IDisposable
 {
     private const float ToneModeGainMap = 0.0f;
     private const float ToneModeSingleLayerSystem = 1.0f;
@@ -32,504 +32,12 @@ public sealed class D3D11HdrRenderPipeline : IHdrRenderPipeline, IDisposable
     private const float HlgReferenceScenePeak = 1000.0f / 80.0f;
     private const float HlgReferenceWhiteScene = 203.0f / 80.0f;
     private const bool UseD2DSystemToneMapForBaseHdr = false;
-
-    private const string GainMapShaderSource = """
-struct VertexOutput
-{
-    float4 Position : SV_POSITION;
-    float2 TexCoord : TEXCOORD0;
-};
-
-Texture2D PrimaryTexture : register(t0);
-Texture2D GainMapTexture : register(t1);
-SamplerState LinearClampSampler : register(s0);
-
-cbuffer GainMapConstants : register(b0)
-{
-    float4 GainMapMin;
-    float4 GainMapMax;
-    float4 Gamma;
-    float4 OffsetSdr;
-    float4 OffsetHdr;
-    float4 GainMapControl;
-    float4 SourceEncoding;
-    float4 Orientation;
-    float4 DisplayMapping;
-    float4 HdrCapacity;
-    float4 ImageLayout;
-    float4 ToneMapInput;
-    float4 ToneMapOutput;
-    float4 ViewModeParams;
-};
-
-VertexOutput VSMain(uint vertexId : SV_VertexID)
-{
-    float2 positions[3] =
-    {
-        float2(-1.0f, -1.0f),
-        float2(-1.0f, 3.0f),
-        float2(3.0f, -1.0f),
-    };
-
-    float2 texCoords[3] =
-    {
-        float2(0.0f, 1.0f),
-        float2(0.0f, -1.0f),
-        float2(2.0f, 1.0f),
-    };
-
-    VertexOutput output;
-    output.Position = float4(positions[vertexId], 0.0f, 1.0f);
-    output.TexCoord = texCoords[vertexId];
-    return output;
-}
-
-float2 ApplyOrientation(float2 uv)
-{
-    float orientation = Orientation.x;
-    if (orientation < 1.5f) return uv;
-    if (orientation < 2.5f) return float2(1.0f - uv.x, uv.y);
-    if (orientation < 3.5f) return float2(1.0f - uv.x, 1.0f - uv.y);
-    if (orientation < 4.5f) return float2(uv.x, 1.0f - uv.y);
-    if (orientation < 5.5f) return float2(uv.y, uv.x);
-    if (orientation < 6.5f) return float2(uv.y, 1.0f - uv.x);
-    if (orientation < 7.5f) return float2(1.0f - uv.y, 1.0f - uv.x);
-    return float2(1.0f - uv.y, uv.x);
-}
-
-float4 FitToImage(float2 panelUv)
-{
-    float2 fittedUv = (panelUv - ImageLayout.zw) / max(ImageLayout.xy, 0.0001f);
-    float inside =
-        step(0.0f, fittedUv.x) *
-        step(fittedUv.x, 1.0f) *
-        step(0.0f, fittedUv.y) *
-        step(fittedUv.y, 1.0f);
-    return float4(saturate(fittedUv), inside, 0.0f);
-}
-
-float3 SrgbToLinear(float3 value)
-{
-    float3 low = value / 12.92f;
-    float3 high = pow((value + 0.055f) / 1.055f, 2.4f);
-    return lerp(high, low, value <= 0.04045f);
-}
-
-float3 Rec709ToLinear(float3 value)
-{
-    float3 low = value / 4.5f;
-    float3 high = pow((value + 0.099f) / 1.099f, 1.0f / 0.45f);
-    return lerp(high, low, value < 0.081f);
-}
-
-float3 Bt2020ToBt709(float3 value)
-{
-    return float3(
-        (1.660491f * value.r) - (0.587641f * value.g) - (0.072850f * value.b),
-        (-0.124550f * value.r) + (1.132900f * value.g) - (0.008349f * value.b),
-        (-0.018151f * value.r) - (0.100579f * value.g) + (1.118730f * value.b));
-}
-
-float3 P3ToBt709(float3 value)
-{
-    return float3(
-        (1.224940f * value.r) - (0.224940f * value.g),
-        (-0.042057f * value.r) + (1.042057f * value.g),
-        (-0.019638f * value.r) - (0.078636f * value.g) + (1.098274f * value.b));
-}
-
-float3 ProPhotoToBt709(float3 value)
-{
-    return float3(
-        (2.034368f * value.r) - (0.727634f * value.g) - (0.306733f * value.b),
-        (-0.228827f * value.r) + (1.231753f * value.g) - (0.002927f * value.b),
-        (-0.008558f * value.r) - (0.153268f * value.g) + (1.161827f * value.b));
-}
-
-float3 ConvertGainMapBaseToBt709(float3 value)
-{
-    float3 converted = value;
-    if (GainMapControl.z > 2.5f)
-    {
-        converted = ProPhotoToBt709(value);
-    }
-    else if (GainMapControl.z > 1.5f)
-    {
-        converted = Bt2020ToBt709(value);
-    }
-    else if (GainMapControl.z > 0.5f)
-    {
-        converted = P3ToBt709(value);
-    }
-
-    return ViewModeParams.w > 0.5f ? max(converted, 0.0f) : converted;
-}
-
-float3 HlgToSceneLinear(float3 value)
-{
-    const float a = 0.17883277f;
-    const float b = 0.28466892f;
-    const float c = 0.55991073f;
-    float3 low = (value * value) / 3.0f;
-    float3 high = (exp((value - c) / a) + b) / 12.0f;
-    return lerp(high, low, value <= 0.5f);
-}
-
-float3 PqToSceneLinear(float3 value)
-{
-    const float m1 = 2610.0f / 16384.0f;
-    const float m2 = 2523.0f / 32.0f;
-    const float c1 = 3424.0f / 4096.0f;
-    const float c2 = 2413.0f / 128.0f;
-    const float c3 = 2392.0f / 128.0f;
-    float3 y = pow(max(value, 0.0f), 1.0f / m2);
-    float3 nits = 10000.0f * pow(max((y - c1) / max(c2 - (c3 * y), 0.000001f), 0.0f), 1.0f / m1);
-    return nits / 80.0f;
-}
-
-float CalculateHdrTargetScenePeak()
-{
-    if (SourceEncoding.x > 1.5f && SourceEncoding.x < 2.5f)
-    {
-        return 1000.0f / 80.0f;
-    }
-
-    return max(DisplayMapping.x * exp2(max(DisplayMapping.z, 0.0f)), DisplayMapping.x);
-}
-
-float CalculateHlgSystemGamma(float targetScenePeak)
-{
-    float targetNits = max(targetScenePeak * 80.0f, 100.0f);
-    return clamp(1.2f + (0.42f * log10(targetNits / 1000.0f)), 1.0f, 1.35f);
-}
-
-float3 ClampToDisplayPeak(float3 value)
-{
-    if (DisplayMapping.y > 0.0f)
-    {
-        value = min(value, DisplayMapping.yyy);
-    }
-
-    return value;
-}
-
-float3 ApplySdrWhiteScale(float3 value)
-{
-    return value * max(DisplayMapping.x, 1.0f);
-}
-
-float3 ApplyAdaptiveToneMapWithWhiteScale(float3 value, float whiteScale)
-{
-    if (ToneMapInput.x < 0.5f)
-    {
-        return ClampToDisplayPeak(value);
-    }
-
-    whiteScale = max(whiteScale, 1.0f);
-    float virtualTarget = max(ToneMapInput.y, whiteScale);
-    float physicalTarget = ToneMapOutput.x > 0.0f ? ToneMapOutput.x : virtualTarget;
-    float target = clamp(ToneMapOutput.z, whiteScale, max(physicalTarget, whiteScale));
-    float tonePeak = max(ToneMapInput.z, max(virtualTarget, target));
-    float contentAvg = max(ToneMapInput.w, 0.0f);
-    float globalScale = clamp(ToneMapOutput.w, 0.02f, 1.0f);
-    float3 mappedValue = value * globalScale;
-    float scaledContentPeak = max(tonePeak * globalScale, target);
-
-    float averageRelativeToWhite = contentAvg / max(whiteScale, 0.0001f);
-    float kneeBlend = saturate((averageRelativeToWhite - 0.10f) / 0.70f);
-    float kneeFactor = lerp(0.36f, 0.16f, kneeBlend);
-    float knee = whiteScale + ((target - whiteScale) * kneeFactor);
-    knee = clamp(knee, whiteScale * 0.85f, target * 0.92f);
-
-    float peak = max(max(mappedValue.r, mappedValue.g), mappedValue.b);
-    if (peak <= knee)
-    {
-        return ClampToDisplayPeak(mappedValue);
-    }
-
-    float sourceRange = max(scaledContentPeak - knee, 0.0001f);
-    float targetRange = max(target - knee, 0.0001f);
-    float x = max(peak - knee, 0.0f);
-    float denominator = max(1.0f - exp(-sourceRange / targetRange), 0.0001f);
-    float mappedPeak = knee + (targetRange * (1.0f - exp(-x / targetRange)) / denominator);
-    mappedPeak = min(mappedPeak, target);
-    return ClampToDisplayPeak(mappedValue * (mappedPeak / max(peak, 0.0001f)));
-}
-
-float3 ApplyAdaptiveToneMap(float3 value)
-{
-    return ApplyAdaptiveToneMapWithWhiteScale(value, max(DisplayMapping.x, 1.0f));
-}
-
-bool IsHlgTransfer()
-{
-    return SourceEncoding.x > 1.5f && SourceEncoding.x < 2.5f;
-}
-
-bool IsPqTransfer()
-{
-    return SourceEncoding.x > 2.5f && SourceEncoding.x < 3.5f;
-}
-
-bool IsLinearScRgbTransfer()
-{
-    return SourceEncoding.x > 3.5f && SourceEncoding.x < 4.5f;
-}
-
-bool IsLinearSceneScRgbTransfer()
-{
-    return SourceEncoding.x > 4.5f;
-}
-
-float GetSingleLayerContentWhiteScale()
-{
-    float exposure = max(ViewModeParams.z, 0.0f);
-    if (IsHlgTransfer())
-    {
-        return max((203.0f / 80.0f) * exposure, 0.0001f);
-    }
-
-    if (IsPqTransfer() || IsLinearSceneScRgbTransfer())
-    {
-        return max((203.0f / 80.0f) * exposure, 0.0001f);
-    }
-
-    if (IsLinearScRgbTransfer())
-    {
-        float displayScale = SourceEncoding.y <= 0.5f ? max(DisplayMapping.x, 1.0f) : 1.0f;
-        return max(displayScale * exposure, 0.0001f);
-    }
-
-    return max(DisplayMapping.x, 1.0f);
-}
-
-float GetSingleLayerToneMapWhiteScale()
-{
-    if (ViewModeParams.x < 0.5f)
-    {
-        return max(DisplayMapping.x, 1.0f);
-    }
-
-    return max(GetSingleLayerContentWhiteScale(), 1.0f);
-}
-
-float GetSingleLayerSdrPreviewScale()
-{
-    if (ViewModeParams.x >= 0.5f)
-    {
-        return 1.0f;
-    }
-
-    return max(DisplayMapping.x, 1.0f) / max(GetSingleLayerContentWhiteScale(), 0.0001f);
-}
-
-float3 ApplySingleLayerDisplayFitToneMap(float3 value)
-{
-    if (ToneMapInput.x < 0.5f)
-    {
-        return ClampToDisplayPeak(value);
-    }
-
-    float whiteScale = GetSingleLayerToneMapWhiteScale();
-    float virtualTarget = max(ToneMapInput.y, whiteScale);
-    float physicalTarget = ToneMapOutput.x > 0.0f ? ToneMapOutput.x : virtualTarget;
-    float target = clamp(ToneMapOutput.z, whiteScale, max(physicalTarget, whiteScale));
-    float tonePeak = max(ToneMapInput.z, max(virtualTarget, target));
-    float midScale = clamp(ToneMapOutput.w, 0.10f, 1.0f);
-    float pressure = saturate(1.0f - midScale);
-    float3 workingValue = value * midScale;
-    float luminance = max(dot(workingValue, float3(0.2126f, 0.7152f, 0.0722f)), 0.0f);
-    if (luminance <= 0.000001f)
-    {
-        return ClampToDisplayPeak(workingValue);
-    }
-
-    float mappedLuminance;
-    if (luminance <= whiteScale)
-    {
-        float midGamma = lerp(1.02f, 1.22f, pressure);
-        mappedLuminance = whiteScale * pow(saturate(luminance / max(whiteScale, 0.0001f)), midGamma);
-    }
-    else
-    {
-        float sourceRange = max((tonePeak * midScale) - whiteScale, 0.0001f);
-        float targetRange = max(target - whiteScale, 0.0001f);
-        float normalized = saturate((luminance - whiteScale) / sourceRange);
-        float shoulder = lerp(2.3f, 3.8f, pressure);
-        float denominator = max(1.0f - exp(-shoulder), 0.0001f);
-        float mappedExcess = targetRange * (1.0f - exp(-normalized * shoulder)) / denominator;
-        mappedLuminance = min(whiteScale + mappedExcess, target);
-    }
-
-    return ClampToDisplayPeak(workingValue * (mappedLuminance / max(luminance, 0.0001f)));
-}
-
-float3 ApplySingleLayerToneMap(float3 value)
-{
-    if (ToneMapOutput.y > 1.5f)
-    {
-        return ApplySingleLayerDisplayFitToneMap(value);
-    }
-
-    return ApplyAdaptiveToneMapWithWhiteScale(value, GetSingleLayerToneMapWhiteScale());
-}
-
-float3 ApplyHdrOutputMapping(float3 value)
-{
-    return ApplyAdaptiveToneMap(ApplySdrWhiteScale(value));
-}
-
-float3 ApplySdrDisplayAdjustment(float3 value)
-{
-    return ClampToDisplayPeak(ApplySdrWhiteScale(value));
-}
-
-float3 DecodeBaseImageSample(float3 encoded)
-{
-    float transfer = SourceEncoding.x;
-    float3 sceneLinear;
-    bool isLinearSceneScRgb = transfer > 4.5f;
-    bool isLinearScRgb = transfer > 3.5f && transfer < 4.5f;
-    if (isLinearSceneScRgb || isLinearScRgb)
-    {
-        sceneLinear = encoded;
-    }
-    else if (transfer > 2.5f)
-    {
-        sceneLinear = PqToSceneLinear(encoded);
-    }
-    else if (transfer > 1.5f)
-    {
-        float targetPeak = CalculateHdrTargetScenePeak();
-        float3 hlgScene = max(HlgToSceneLinear(encoded), 0.0f);
-        float hlgLuma = dot(hlgScene, float3(0.2627f, 0.6780f, 0.0593f));
-        sceneLinear = hlgScene * pow(max(hlgLuma, 0.000001f), CalculateHlgSystemGamma(targetPeak) - 1.0f) * targetPeak;
-    }
-    else
-    {
-        sceneLinear = SrgbToLinear(encoded);
-    }
-
-    if (SourceEncoding.y > 2.5f)
-    {
-        sceneLinear = ProPhotoToBt709(sceneLinear);
-        if (ViewModeParams.w > 0.5f)
-        {
-            sceneLinear = max(sceneLinear, 0.0f);
-        }
-    }
-    else if (SourceEncoding.y > 1.5f)
-    {
-        sceneLinear = Bt2020ToBt709(sceneLinear);
-        if (ViewModeParams.w > 0.5f)
-        {
-            sceneLinear = max(sceneLinear, 0.0f);
-        }
-    }
-    else if (SourceEncoding.y > 0.5f)
-    {
-        sceneLinear = P3ToBt709(sceneLinear);
-        if (ViewModeParams.w > 0.5f)
-        {
-            sceneLinear = max(sceneLinear, 0.0f);
-        }
-    }
-
-    if (transfer <= 1.5f)
-    {
-        return ApplySdrDisplayAdjustment(sceneLinear);
-    }
-
-    // Diffuse-white / exposure scale (1.0 = absolute). This only affects
-    // single-layer HDR (PQ/HLG/linear scRGB) content.
-    sceneLinear *= max(ViewModeParams.z, 0.0f);
-    sceneLinear *= GetSingleLayerSdrPreviewScale();
-
-    return ApplySingleLayerToneMap(sceneLinear);
-}
-
-float3 DecodeGainMapBaseSample(float3 encoded)
-{
-    if (SourceEncoding.x > 0.5f && SourceEncoding.x < 1.5f)
-    {
-        return Rec709ToLinear(encoded);
-    }
-
-    return SrgbToLinear(encoded);
-}
-
-float CalculateGainMapWeight()
-{
-    if (HdrCapacity.y <= HdrCapacity.x)
-    {
-        return saturate(GainMapControl.x);
-    }
-
-    float displayHeadroom = DisplayMapping.z;
-    return saturate(GainMapControl.x) * saturate((displayHeadroom - HdrCapacity.x) / (HdrCapacity.y - HdrCapacity.x));
-}
-
-float CalculateGainMapSceneScale()
-{
-    float exposureScale = max(ViewModeParams.z, 0.0f);
-    if (GainMapControl.y <= 0.5f)
-    {
-        return (203.0f / 80.0f) * exposureScale;
-    }
-
-    return max(DisplayMapping.x, 1.0f) * exposureScale;
-}
-
-float3 ApplyGainMapOutputMapping(float3 value)
-{
-    return ApplyAdaptiveToneMap(value * CalculateGainMapSceneScale());
-}
-
-float4 PSMain(VertexOutput input) : SV_TARGET
-{
-    float4 fit = FitToImage(input.TexCoord);
-    clip(fit.z - 0.5f);
-    float2 uv = ApplyOrientation(fit.xy);
-    float3 sdr = DecodeGainMapBaseSample(PrimaryTexture.Sample(LinearClampSampler, uv).rgb);
-    float3 recovery = saturate(GainMapTexture.Sample(LinearClampSampler, uv).rgb);
-
-    if (ViewModeParams.x < 0.5f)
-    {
-        return float4(ApplySdrDisplayAdjustment(ConvertGainMapBaseToBt709(sdr)), 1.0f);
-    }
-
-    if (ViewModeParams.x > 2.5f && ViewModeParams.x < 3.5f)
-    {
-        return float4(ApplySdrDisplayAdjustment(SrgbToLinear(recovery)), 1.0f);
-    }
-
-    float3 hdr;
-    if (GainMapControl.y > 0.5f)
-    {
-        float3 gain = saturate(Rec709ToLinear(recovery));
-        float headroom = max(GainMapMax.x, 1.0f);
-        float effectiveHeadroom = pow(headroom, CalculateGainMapWeight());
-        hdr = sdr * (1.0f + ((effectiveHeadroom - 1.0f) * gain));
-    }
-    else
-    {
-        float3 logRecovery = pow(recovery, 1.0f / max(Gamma.rgb, 0.0001f));
-        float3 logBoost = lerp(GainMapMin.rgb, GainMapMax.rgb, logRecovery);
-        hdr = (sdr + OffsetSdr.rgb) * exp2(logBoost * CalculateGainMapWeight()) - OffsetHdr.rgb;
-    }
-    return float4(ApplyGainMapOutputMapping(ConvertGainMapBaseToBt709(hdr)), 1.0f);
-}
-
-float4 BaseImagePSMain(VertexOutput input) : SV_TARGET
-{
-    float4 fit = FitToImage(input.TexCoord);
-    clip(fit.z - 0.5f);
-    float2 uv = fit.xy;
-    float3 encoded = PrimaryTexture.Sample(LinearClampSampler, uv).rgb;
-    float3 mapped = DecodeBaseImageSample(encoded);
-    return float4(mapped, 1.0f);
-}
-""";
+    private const string GainMapVertexShaderResourceName =
+        "HdrImageViewer.Rendering.Shaders.GainMap.VS.cso";
+    private const string GainMapPixelShaderResourceName =
+        "HdrImageViewer.Rendering.Shaders.GainMap.PS.cso";
+    private const string BaseImagePixelShaderResourceName =
+        "HdrImageViewer.Rendering.Shaders.BaseImage.PS.cso";
 
     private static readonly D3DFeatureLevel[] FeatureLevels =
     [
@@ -603,6 +111,7 @@ float4 BaseImagePSMain(VertexOutput input) : SV_TARGET
     private int _contentPixelHeight;
     private float _contentOrientation = 1.0f;
     private bool _isDisposed;
+    private long _deviceGeneration;
     private bool _scRgbColorSpaceAvailable;
     private bool _scRgbColorSpaceApplied;
     private string _panelBindingStatus = "WinUI swap chain not bound";
@@ -617,6 +126,12 @@ float4 BaseImagePSMain(VertexOutput input) : SV_TARGET
     private ToneMapAnalysis _toneMapAnalysis;
     private GainMapShaderConstants _gainMapConstants;
     private HdrDisplayConfiguration _displayConfiguration = HdrDisplayConfiguration.Unknown;
+    private Vector4? _renderImageLayout;
+    private bool _toneMapAnalysisDirty = true;
+    private Vector4 _cachedToneMapInput;
+    private Vector4 _cachedToneMapOutput;
+    private bool _frameVerificationPending = true;
+    private FrameAnalysis _lastFrameAnalysis = new(false, 0.0f, "frame verification pending");
 
     public HdrRenderIntent Intent
     {
@@ -640,51 +155,25 @@ float4 BaseImagePSMain(VertexOutput input) : SV_TARGET
     public GainmapViewMode ViewMode
     {
         get => _viewMode;
-        set
-        {
-            if (_viewMode == value)
-            {
-                return;
-            }
-
-            _viewMode = value;
-            UpdateGainMapConstantsBuffer();
-        }
+        set => ApplySettings(Settings with { ViewMode = value });
     }
 
     public HdrHeadroomMode HeadroomMode
     {
         get => _headroomMode;
-        set
-        {
-            if (_headroomMode == value)
-            {
-                return;
-            }
-
-            _headroomMode = value;
-            UpdateGainMapConstantsBuffer();
-        }
+        set => ApplySettings(Settings with { HeadroomMode = value });
     }
 
     public float? DisplayCapacityOverrideLog2
     {
         get => _displayCapacityOverrideLog2;
-        set
-        {
-            _displayCapacityOverrideLog2 = value;
-            UpdateGainMapConstantsBuffer();
-        }
+        set => ApplySettings(Settings with { DisplayCapacityOverrideLog2 = value });
     }
 
     public bool AdaptiveToneMappingEnabled
     {
         get => _adaptiveToneMappingEnabled;
-        set
-        {
-            _adaptiveToneMappingEnabled = value;
-            UpdateGainMapConstantsBuffer();
-        }
+        set => ApplySettings(Settings with { AdaptiveToneMappingEnabled = value });
     }
 
     // Exposure / diffuse-white scale applied before tone mapping. 1.0 keeps the
@@ -694,21 +183,66 @@ float4 BaseImagePSMain(VertexOutput input) : SV_TARGET
     public float ReferenceWhiteExposureScale
     {
         get => _referenceWhiteExposureScale;
-        set
-        {
-            _referenceWhiteExposureScale = float.IsFinite(value) ? Math.Clamp(value, 0.05f, 16.0f) : 1.0f;
-            UpdateGainMapConstantsBuffer();
-        }
+        set => ApplySettings(Settings with { ReferenceWhiteExposureScale = value });
     }
 
     public ColorGamutMappingMode ColorGamutMappingMode
     {
         get => _colorGamutMappingMode;
-        set
+        set => ApplySettings(Settings with { ColorGamutMappingMode = value });
+    }
+
+    public HdrRendererSettings Settings => new(
+        _viewMode,
+        _headroomMode,
+        _displayCapacityOverrideLog2,
+        _adaptiveToneMappingEnabled,
+        _referenceWhiteExposureScale,
+        _colorGamutMappingMode,
+        _displayConfiguration);
+
+    public bool ApplySettings(HdrRendererSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+
+        var viewMode = Enum.IsDefined(settings.ViewMode)
+            ? settings.ViewMode
+            : GainmapViewMode.Adaptive;
+        var headroomMode = Enum.IsDefined(settings.HeadroomMode)
+            ? settings.HeadroomMode
+            : HdrHeadroomMode.SystemAdaptive;
+        float? displayCapacityOverride = settings.DisplayCapacityOverrideLog2 is { } capacity
+            && float.IsFinite(capacity)
+                ? Math.Clamp(capacity, 0.0f, 16.0f)
+                : null;
+        var exposureScale = float.IsFinite(settings.ReferenceWhiteExposureScale)
+            ? Math.Clamp(settings.ReferenceWhiteExposureScale, 0.05f, 16.0f)
+            : 1.0f;
+        var gamutMappingMode = Enum.IsDefined(settings.ColorGamutMappingMode)
+            ? settings.ColorGamutMappingMode
+            : ColorGamutMappingMode.Managed;
+        var displayConfiguration = settings.DisplayConfiguration ?? HdrDisplayConfiguration.Unknown;
+
+        if (_viewMode == viewMode
+            && _headroomMode == headroomMode
+            && Nullable.Equals(_displayCapacityOverrideLog2, displayCapacityOverride)
+            && _adaptiveToneMappingEnabled == settings.AdaptiveToneMappingEnabled
+            && Math.Abs(_referenceWhiteExposureScale - exposureScale) <= 0.0001f
+            && _colorGamutMappingMode == gamutMappingMode
+            && Equals(_displayConfiguration, displayConfiguration))
         {
-            _colorGamutMappingMode = Enum.IsDefined(value) ? value : ColorGamutMappingMode.Managed;
-            UpdateGainMapConstantsBuffer();
+            return false;
         }
+
+        _viewMode = viewMode;
+        _headroomMode = headroomMode;
+        _displayCapacityOverrideLog2 = displayCapacityOverride;
+        _adaptiveToneMappingEnabled = settings.AdaptiveToneMappingEnabled;
+        _referenceWhiteExposureScale = exposureScale;
+        _colorGamutMappingMode = gamutMappingMode;
+        _displayConfiguration = displayConfiguration;
+        InvalidateToneMapAnalysis();
+        return true;
     }
 
     public string LastRenderStatus { get; private set; } = "Renderer not attached";
@@ -716,6 +250,8 @@ float4 BaseImagePSMain(VertexOutput input) : SV_TARGET
     public bool LastFrameHasVisiblePixels { get; private set; }
 
     public bool IsSwapChainPanelBound { get; private set; }
+
+    public long DeviceGeneration => _deviceGeneration;
 
     public int ContentPixelWidth => _contentPixelWidth;
 
@@ -741,11 +277,10 @@ float4 BaseImagePSMain(VertexOutput input) : SV_TARGET
     public HdrDisplayConfiguration DisplayConfiguration
     {
         get => _displayConfiguration;
-        set
+        set => ApplySettings(Settings with
         {
-            _displayConfiguration = value ?? HdrDisplayConfiguration.Unknown;
-            UpdateGainMapConstantsBuffer();
-        }
+            DisplayConfiguration = value ?? HdrDisplayConfiguration.Unknown,
+        });
     }
 
     public void Attach(SwapChainPanel panel)
@@ -796,6 +331,8 @@ float4 BaseImagePSMain(VertexOutput input) : SV_TARGET
             _document = null;
             ReleaseGainMapResources();
             LastFrameHasVisiblePixels = false;
+            _frameVerificationPending = true;
+            _lastFrameAnalysis = new FrameAnalysis(false, 0.0f, "frame verification pending");
 
             EnsureRenderTargetView();
             if (_context is not null && _swapChain is not null && _renderTargetView is not null)
@@ -843,12 +380,125 @@ float4 BaseImagePSMain(VertexOutput input) : SV_TARGET
         }
     }
 
-    public async Task ResizeAsync(int pixelWidth, int pixelHeight, CancellationToken cancellationToken)
+    public Task ResizeAsync(
+        int pixelWidth,
+        int pixelHeight,
+        CancellationToken cancellationToken)
+    {
+        return ResizeCoreAsync(
+            pixelWidth,
+            pixelHeight,
+            imageLayout: null,
+            cancellationToken);
+    }
+
+    internal Task ResizeAsync(
+        HdrRenderViewport viewport,
+        CancellationToken cancellationToken)
+    {
+        if (!viewport.IsValid)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(viewport),
+                "Render viewport dimensions and image layout must be finite and positive.");
+        }
+
+        return ResizeCoreAsync(
+            viewport.PixelWidth,
+            viewport.PixelHeight,
+            viewport.ImageLayout,
+            cancellationToken);
+    }
+
+    internal async Task RedrawAsync(
+        HdrRenderViewport viewport,
+        CancellationToken cancellationToken)
+    {
+        if (!viewport.IsValid)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(viewport),
+                "Render viewport dimensions and image layout must be finite and positive.");
+        }
+
+        await _renderOperationGate.WaitAsync(cancellationToken);
+        try
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            _renderImageLayout = viewport.ImageLayout;
+
+            if (_panel is null)
+            {
+                LastRenderStatus = "Viewport redraw skipped: panel missing";
+                return;
+            }
+
+            EnsureDevice();
+            if (_swapChain is null)
+            {
+                CreateSwapChain(viewport.PixelWidth, viewport.PixelHeight);
+            }
+            else if (_pixelWidth != viewport.PixelWidth || _pixelHeight != viewport.PixelHeight)
+            {
+                ResizeSwapChain(viewport.PixelWidth, viewport.PixelHeight);
+            }
+            else
+            {
+                ConfigureSwapChainPanelScale();
+            }
+
+            if (_document?.HasRenderableGainMap == true)
+            {
+                if (_primaryTextureView is not null && _gainMapTextureView is not null)
+                {
+                    RenderGainMap();
+                }
+                else
+                {
+                    await PresentGainMapFrameAsync(_document, cancellationToken);
+                }
+
+                return;
+            }
+
+            if (_document is not null)
+            {
+                if (_primaryTextureView is not null)
+                {
+                    RenderBaseImage(_document);
+                }
+                else
+                {
+                    await PresentBaseImageFrameAsync(_document, cancellationToken);
+                }
+
+                return;
+            }
+
+            PresentProbeFrame();
+        }
+        finally
+        {
+            _renderOperationGate.Release();
+        }
+    }
+
+    internal void RequestFrameVerification()
+    {
+        _frameVerificationPending = true;
+    }
+
+    private async Task ResizeCoreAsync(
+        int pixelWidth,
+        int pixelHeight,
+        Vector4? imageLayout,
+        CancellationToken cancellationToken)
     {
         await _renderOperationGate.WaitAsync(cancellationToken);
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
+            _renderImageLayout = imageLayout;
 
             if (_panel is null || pixelWidth <= 0 || pixelHeight <= 0)
             {
@@ -917,200 +567,6 @@ float4 BaseImagePSMain(VertexOutput input) : SV_TARGET
         _context?.Dispose();
         _device?.Dispose();
         _renderOperationGate.Dispose();
-    }
-
-    private void EnsureDevice()
-    {
-        if (_device is not null)
-        {
-            return;
-        }
-
-        _device = D3D11.D3D11CreateDevice(
-            DriverType.Hardware,
-            DeviceCreationFlags.BgraSupport,
-            FeatureLevels);
-        _context = _device.ImmediateContext;
-
-        using var dxgiDevice = _device.QueryInterface<IDXGIDevice>();
-        using var adapter = dxgiDevice.GetAdapter();
-        _factory = adapter.GetParent<IDXGIFactory2>();
-        EnsureDirect2DDevice(dxgiDevice);
-    }
-
-    private void EnsureDirect2DDevice(IDXGIDevice dxgiDevice)
-    {
-        if (_d2dContext is not null)
-        {
-            return;
-        }
-
-        _d2dFactory = D2D.D2D1CreateFactory<ID2D1Factory1>(FactoryType.MultiThreaded, DebugLevel.None);
-        _d2dDevice = _d2dFactory.CreateDevice(dxgiDevice);
-        _d2dContext = _d2dDevice.CreateDeviceContext(DeviceContextOptions.None);
-        _d2dContext.UnitMode = UnitMode.Pixels;
-        _d2dContext2 = _d2dContext.QueryInterfaceOrNull<ID2D1DeviceContext2>();
-        _d2dContext5 = _d2dContext.QueryInterfaceOrNull<ID2D1DeviceContext5>();
-        _wicFactory = new IWICImagingFactory();
-    }
-
-    private void CreateSwapChain(int pixelWidth, int pixelHeight)
-    {
-        if (_panel is null || _device is null || _factory is null)
-        {
-            return;
-        }
-
-        _pixelWidth = pixelWidth;
-        _pixelHeight = pixelHeight;
-
-        var description = new SwapChainDescription1(
-            (uint)pixelWidth,
-            (uint)pixelHeight,
-            Format.R16G16B16A16_Float,
-            stereo: false,
-            Usage.RenderTargetOutput,
-            bufferCount: 2,
-            Scaling.Stretch,
-            SwapEffect.FlipSequential,
-            AlphaMode.Ignore,
-            SwapChainFlags.None);
-
-        _swapChain = _factory.CreateSwapChainForComposition(_device, description, null);
-        _swapChain2 = _swapChain.QueryInterfaceOrNull<IDXGISwapChain2>();
-        _swapChain3 = _swapChain.QueryInterfaceOrNull<IDXGISwapChain3>();
-        ConfigureScRgbColorSpace();
-        ConfigureSwapChainPanelScale();
-
-        if (!TryBindSwapChainToPanel())
-        {
-            return;
-        }
-
-        CreateRenderTargetView();
-    }
-
-    private void ResizeSwapChain(int pixelWidth, int pixelHeight)
-    {
-        if (_swapChain is null)
-        {
-            return;
-        }
-
-        ReleaseD2DTargetBitmap();
-        _renderTargetView?.Dispose();
-        _renderTargetView = null;
-
-        _swapChain.ResizeBuffers(
-            bufferCount: 2,
-            width: (uint)pixelWidth,
-            height: (uint)pixelHeight,
-            newFormat: Format.R16G16B16A16_Float,
-            swapChainFlags: SwapChainFlags.None).CheckError();
-
-        _pixelWidth = pixelWidth;
-        _pixelHeight = pixelHeight;
-        ConfigureScRgbColorSpace();
-        ConfigureSwapChainPanelScale();
-        if (!TryBindSwapChainToPanel())
-        {
-            return;
-        }
-
-        CreateRenderTargetView();
-    }
-
-    private void ConfigureScRgbColorSpace()
-    {
-        _scRgbColorSpaceAvailable = false;
-        _scRgbColorSpaceApplied = false;
-
-        if (_swapChain3 is null)
-        {
-            return;
-        }
-
-        var support = _swapChain3.CheckColorSpaceSupport(ColorSpaceType.RgbFullG10NoneP709);
-        _scRgbColorSpaceAvailable = (support & SwapChainColorSpaceSupportFlags.Present) == SwapChainColorSpaceSupportFlags.Present;
-        if (_scRgbColorSpaceAvailable)
-        {
-            _swapChain3.SetColorSpace1(ColorSpaceType.RgbFullG10NoneP709);
-            _scRgbColorSpaceApplied = true;
-        }
-    }
-
-    private void ConfigureSwapChainPanelScale()
-    {
-        if (_panel is null || _swapChain2 is null)
-        {
-            _swapChainTransformStatus = "swap chain DPI transform unavailable";
-            return;
-        }
-
-        var scaleX = Math.Max(0.0001f, _panel.CompositionScaleX);
-        var scaleY = Math.Max(0.0001f, _panel.CompositionScaleY);
-        var transform = Matrix3x2.CreateScale(1.0f / scaleX, 1.0f / scaleY);
-        _swapChain2.MatrixTransform = transform;
-        _swapChainTransformStatus = $"DPI transform {1.0f / scaleX:0.###}x{1.0f / scaleY:0.###} for scale {scaleX:0.###}x{scaleY:0.###}";
-    }
-
-    private void CreateRenderTargetView()
-    {
-        if (_device is null || _swapChain is null)
-        {
-            LastRenderStatus = "Create render target skipped: device or swap chain missing";
-            return;
-        }
-
-        using var backBuffer = _swapChain.GetBuffer<ID3D11Texture2D>(0);
-        _renderTargetView = _device.CreateRenderTargetView(backBuffer, null);
-        CreateD2DTargetBitmap();
-    }
-
-    private void CreateD2DTargetBitmap()
-    {
-        if (_d2dContext is null || _swapChain is null)
-        {
-            return;
-        }
-
-        ReleaseD2DTargetBitmap();
-        using var backBuffer = _swapChain.GetBuffer<IDXGISurface>(0);
-        var properties = new BitmapProperties1(
-            new DCommonPixelFormat(Format.R16G16B16A16_Float, DCommonAlphaMode.Ignore),
-            96.0f,
-            96.0f,
-            BitmapOptions.Target | BitmapOptions.CannotDraw);
-        _d2dTargetBitmap = _d2dContext.CreateBitmapFromDxgiSurface(backBuffer, properties);
-        _d2dContext.Target = _d2dTargetBitmap;
-    }
-
-    private void ReleaseD2DTargetBitmap()
-    {
-        if (_d2dContext is not null)
-        {
-            _d2dContext.Target = null;
-        }
-
-        _d2dTargetBitmap?.Dispose();
-        _d2dTargetBitmap = null;
-    }
-
-    private void PresentProbeFrame()
-    {
-        EnsureRenderTargetView();
-
-        if (_context is null || _swapChain is null || _renderTargetView is null)
-        {
-            LastRenderStatus = "Probe frame skipped: D3D resources missing";
-            return;
-        }
-
-        var color = new Color4(1.35f, 1.35f, 1.35f, 1.0f);
-        _context.ClearRenderTargetView(_renderTargetView, color);
-        _context.Flush();
-        _swapChain.Present(1, PresentFlags.None).CheckError();
-        LastRenderStatus = $"Probe frame presented at {_pixelWidth}x{_pixelHeight}; {BuildOutputSummary()}";
     }
 
     private async Task PresentGainMapFrameAsync(
@@ -1225,18 +681,29 @@ float4 BaseImagePSMain(VertexOutput input) : SV_TARGET
             return;
         }
 
-        if (_gainMapVertexShader is null || _gainMapPixelShader is null || _baseImagePixelShader is null)
+        if (_gainMapVertexShader is null
+            || _gainMapPixelShader is null
+            || _baseImagePixelShader is null)
         {
-            var shaderFlags = ShaderFlags.OptimizationLevel3;
-            var vertexShader = Compiler.Compile(GainMapShaderSource, "VSMain", "GainMap.hlsl", "vs_5_0", shaderFlags, EffectFlags.None);
-            var pixelShader = Compiler.Compile(GainMapShaderSource, "PSMain", "GainMap.hlsl", "ps_5_0", shaderFlags, EffectFlags.None);
-            var basePixelShader = Compiler.Compile(GainMapShaderSource, "BaseImagePSMain", "GainMap.hlsl", "ps_5_0", shaderFlags, EffectFlags.None);
-            _gainMapVertexShader = _device.CreateVertexShader(vertexShader.Span, null);
-            _gainMapPixelShader = _device.CreatePixelShader(pixelShader.Span, null);
-            _baseImagePixelShader = _device.CreatePixelShader(basePixelShader.Span, null);
+            var vertexShader = LoadEmbeddedShaderBytecode(
+                GainMapVertexShaderResourceName);
+            var pixelShader = LoadEmbeddedShaderBytecode(
+                GainMapPixelShaderResourceName);
+            var basePixelShader = LoadEmbeddedShaderBytecode(
+                BaseImagePixelShaderResourceName);
+            _gainMapVertexShader = _device.CreateVertexShader(
+                vertexShader,
+                null);
+            _gainMapPixelShader = _device.CreatePixelShader(
+                pixelShader,
+                null);
+            _baseImagePixelShader = _device.CreatePixelShader(
+                basePixelShader,
+                null);
         }
 
-        _linearClampSampler ??= _device.CreateSamplerState(SamplerDescription.LinearClamp);
+        _linearClampSampler ??=
+            _device.CreateSamplerState(SamplerDescription.LinearClamp);
         _gainMapConstantsBuffer ??= _device.CreateBuffer(
             (uint)Marshal.SizeOf<GainMapShaderConstants>(),
             BindFlags.ConstantBuffer,
@@ -1244,6 +711,24 @@ float4 BaseImagePSMain(VertexOutput input) : SV_TARGET
             CpuAccessFlags.None,
             ResourceOptionFlags.None,
             0);
+    }
+
+    private static byte[] LoadEmbeddedShaderBytecode(string resourceName)
+    {
+        using var stream = typeof(D3D11HdrRenderPipeline).Assembly
+            .GetManifestResourceStream(resourceName)
+            ?? throw new InvalidOperationException(
+                $"Embedded shader resource is missing: {resourceName}");
+        if (stream.Length <= 0 || stream.Length > int.MaxValue)
+        {
+            throw new InvalidDataException(
+                $"Embedded shader resource has an invalid size: "
+                + $"{resourceName} ({stream.Length} bytes)");
+        }
+
+        var bytecode = new byte[checked((int)stream.Length)];
+        stream.ReadExactly(bytecode);
+        return bytecode;
     }
 
     private int? CalculateViewerDecodeMaxPixelSize(HdrImageDocument document)
@@ -1290,6 +775,8 @@ float4 BaseImagePSMain(VertexOutput input) : SV_TARGET
         _gainMapTextureView = _device.CreateShaderResourceView(_gainMapTexture, null);
         _primaryAnalysisSource = CreateBitmapAnalysisSource(inputs.Primary);
         _gainMapAnalysisSource = CreateGainMapAnalysisSource(inputs.Primary, inputs.GainMap, inputs.Constants);
+        _frameVerificationPending = true;
+        InvalidateToneMapAnalysis();
 
         _gainMapConstants = inputs.Constants;
         _contentPixelWidth = inputs.Primary.PixelWidth;
@@ -1312,6 +799,8 @@ float4 BaseImagePSMain(VertexOutput input) : SV_TARGET
         _primaryTextureView = _device.CreateShaderResourceView(_primaryTexture, null);
         _primaryAnalysisSource = CreateBitmapAnalysisSource(bitmap);
         _gainMapAnalysisSource = null;
+        _frameVerificationPending = true;
+        InvalidateToneMapAnalysis();
         _baseDecoderName = bitmap.DecoderName;
         _baseEncodingSummary = bitmap.RenderEncodingSummary;
         _gainMapConstants = default;
@@ -1484,7 +973,7 @@ float4 BaseImagePSMain(VertexOutput input) : SV_TARGET
         _context.PSSetConstantBuffer(0, _gainMapConstantsBuffer);
         _context.Draw(3, 0);
 
-        var frameAnalysis = AnalyzeBackBuffer();
+        var frameAnalysis = AnalyzeBackBufferIfPending();
         LastFrameHasVisiblePixels = frameAnalysis.HasVisiblePixels;
         _context.PSUnsetShaderResources(0, 2);
         _context.Flush();
@@ -1556,7 +1045,7 @@ float4 BaseImagePSMain(VertexOutput input) : SV_TARGET
                 DrawD2DBaseColorManagedImageGraph();
 
                 d2dStage = "present D2D color-managed frame";
-                var colorManagedFrameAnalysis = AnalyzeBackBuffer();
+                var colorManagedFrameAnalysis = AnalyzeBackBufferIfPending();
                 LastFrameHasVisiblePixels = colorManagedFrameAnalysis.HasVisiblePixels;
                 _context?.Flush();
                 _swapChain.Present(1, PresentFlags.None).CheckError();
@@ -1595,7 +1084,7 @@ float4 BaseImagePSMain(VertexOutput input) : SV_TARGET
             d2dStage = "draw D2D graph";
             DrawD2DBaseImageGraph();
 
-            var frameAnalysis = AnalyzeBackBuffer();
+            var frameAnalysis = AnalyzeBackBufferIfPending();
             var d2dInputFeedbackSummary = string.Empty;
             var outputMaxScene = Math.Max(outputMaxNits / 80.0f, 1.0f);
             if (frameAnalysis.MaxSceneValue > outputMaxScene * 1.03f)
@@ -1611,7 +1100,7 @@ float4 BaseImagePSMain(VertexOutput input) : SV_TARGET
                     _d2dMeasuredInputMaxNits = Math.Max(_d2dMeasuredInputMaxNits, measuredInputMaxNits);
                     _d2dBaseToneMap.InputMaxLuminance = inputMaxNits;
                     DrawD2DBaseImageGraph();
-                    frameAnalysis = AnalyzeBackBuffer();
+                    frameAnalysis = AnalyzeBackBufferIfPending();
                     d2dInputFeedbackSummary = $"; measured input max {inputMaxNits:0} nits";
                 }
             }
@@ -1867,12 +1356,7 @@ float4 BaseImagePSMain(VertexOutput input) : SV_TARGET
 
     private Matrix3x2 CalculateD2DImageTransform()
     {
-        var layout = CalculateUniformImageLayout(
-            _contentPixelWidth,
-            _contentPixelHeight,
-            _contentOrientation,
-            _pixelWidth,
-            _pixelHeight);
+        var layout = GetCurrentImageLayout();
         var scaleX = layout.X * _pixelWidth / Math.Max(_contentPixelWidth, 1);
         var scaleY = layout.Y * _pixelHeight / Math.Max(_contentPixelHeight, 1);
         var offsetX = layout.Z * _pixelWidth;
@@ -1968,963 +1452,13 @@ float4 BaseImagePSMain(VertexOutput input) : SV_TARGET
         _context.PSSetConstantBuffer(0, _gainMapConstantsBuffer);
         _context.Draw(3, 0);
 
-        var frameAnalysis = AnalyzeBackBuffer();
+        var frameAnalysis = AnalyzeBackBufferIfPending();
         LastFrameHasVisiblePixels = frameAnalysis.HasVisiblePixels;
         _context.PSUnsetShaderResources(0, 1);
         _context.Flush();
         _swapChain.Present(1, PresentFlags.None).CheckError();
         var d2dFallback = string.IsNullOrWhiteSpace(_d2dFallbackStatus) ? string.Empty : $"{_d2dFallbackStatus}; ";
         LastRenderStatus = $"{d2dFallback}Base image shader presented at {_pixelWidth}x{_pixelHeight}; {BuildLayoutSummary()}; decoder {_baseEncodingSummary}; {BuildBaseImageMappingSummary()}; {frameAnalysis.Summary}; {BuildOutputSummary()}";
-    }
-
-    private void UpdateGainMapConstantsBuffer()
-    {
-        if (_context is null || _gainMapConstantsBuffer is null)
-        {
-            return;
-        }
-
-        var constants = _gainMapConstants;
-        constants.GainMapControl = new Vector4(
-            constants.GainMapControl.X,
-            constants.GainMapControl.Y,
-            constants.GainMapControl.Z,
-            0.0f);
-        constants.DisplayMapping = new Vector4(
-            EffectiveSceneToSdrWhiteScale,
-            EffectiveMaxSceneValue,
-            EffectiveDisplayBoostLog2,
-            _displayConfiguration.MaxFullFrameSceneValue);
-        constants.ImageLayout = CalculateUniformImageLayout(
-            _contentPixelWidth,
-            _contentPixelHeight,
-            _contentOrientation,
-            _pixelWidth,
-            _pixelHeight);
-        constants.ToneMapInput = BuildToneMapConstants(constants);
-        constants.ToneMapOutput = BuildToneMapOutputConstants();
-        constants.ViewModeParams = new Vector4((float)EffectiveViewModeForCurrentFrame, (float)_headroomMode, _referenceWhiteExposureScale, (float)_colorGamutMappingMode);
-        _context.UpdateSubresource(in constants, _gainMapConstantsBuffer, 0, 0, 0, null);
-    }
-
-    private Vector4 BuildToneMapConstants(GainMapShaderConstants constants)
-    {
-        _toneMapAnalysis = default;
-        _toneMappingEnabledForCurrentFrame = false;
-        var effectiveViewMode = EffectiveViewModeForCurrentFrame;
-        var baseHdrImage = _gainMapAnalysisSource is null
-            && _primaryAnalysisSource?.IsHdrEncoded == true;
-        var gainMapHdrImage = _gainMapAnalysisSource is not null;
-        var alternateImageMode = effectiveViewMode == GainmapViewMode.AlternateImage;
-        var baseHdrNeedsToneMap = baseHdrImage && !alternateImageMode;
-        var gainMapNeedsDisplayFitToneMap = gainMapHdrImage
-            && effectiveViewMode == GainmapViewMode.Adaptive;
-        var adaptiveToneMapRequested = _adaptiveToneMappingEnabled && !alternateImageMode;
-        var useToneMapping = adaptiveToneMapRequested || baseHdrNeedsToneMap || gainMapNeedsDisplayFitToneMap;
-        if (!useToneMapping
-            || _primaryAnalysisSource is null
-            || _contentPixelWidth <= 0
-            || _contentPixelHeight <= 0)
-        {
-            return Vector4.Zero;
-        }
-
-        var analysis = _gainMapAnalysisSource is not null
-            ? AnalyzeGainMapToneMapInput(constants)
-            : AnalyzeBaseHdrToneMapInput(constants);
-        if (analysis.VirtualTargetPeak <= 0.0f)
-        {
-            return Vector4.Zero;
-        }
-
-        _toneMapAnalysis = analysis;
-        _toneMappingEnabledForCurrentFrame = true;
-        return new Vector4(
-            1.0f,
-            analysis.VirtualTargetPeak,
-            analysis.ToneMapPeak,
-            analysis.ContentAverage);
-    }
-
-    private Vector4 BuildToneMapOutputConstants()
-    {
-        if (!_toneMappingEnabledForCurrentFrame || _toneMapAnalysis.VirtualTargetPeak <= 0.0f)
-        {
-            return Vector4.Zero;
-        }
-
-        var mode = ToneModeGainMap;
-        if (_gainMapAnalysisSource is null && _primaryAnalysisSource?.IsHdrEncoded == true)
-        {
-            mode = IsSingleLayerDisplayFitToneMapEnabled()
-                ? ToneModeSingleLayerDisplayFit
-                : ToneModeSingleLayerSystem;
-        }
-
-        return new Vector4(
-            _toneMapAnalysis.PhysicalTargetPeak,
-            mode,
-            _toneMapAnalysis.AdaptiveTargetPeak,
-            _toneMapAnalysis.GlobalScale);
-    }
-
-    private ToneMapAnalysis AnalyzeGainMapToneMapInput(GainMapShaderConstants constants)
-    {
-        if (_gainMapAnalysisSource is null)
-        {
-            return default;
-        }
-
-        var weight = CalculateGainMapWeightForStatus();
-        var whiteScale = Math.Max(EffectiveSceneToSdrWhiteScale, 1.0f);
-        var sceneScale = CalculateGainMapSceneScale(constants);
-        var virtualTargetPeak = CalculateBaseHdrVirtualTargetPeak(constants, whiteScale);
-        var manualTarget = _displayCapacityOverrideLog2 is not null && !_adaptiveToneMappingEnabled;
-        var effectiveMaxSceneValue = EffectiveMaxSceneValue;
-        var physicalTargetPeak = manualTarget
-            ? virtualTargetPeak
-            : effectiveMaxSceneValue > 0.0f
-                ? Math.Min(effectiveMaxSceneValue, virtualTargetPeak)
-                : virtualTargetPeak;
-        double luminanceSum = 0.0;
-        var contentPeak = 0.0f;
-        var samples = 0;
-        var peakSamples = new List<float>(_gainMapAnalysisSource.Samples.Length);
-
-        foreach (var sample in _gainMapAnalysisSource.Samples)
-        {
-            var hdr = constants.GainMapControl.Y > 0.5f
-                ? HdrColorMath.ReconstructAppleHdrSample(sample.Sdr, sample.Gain, constants.GainMapMax.X, weight)
-                : HdrColorMath.ReconstructAdobeHdrSample(sample.Sdr, sample.Gain, constants, weight);
-            hdr = HdrColorMath.ConvertGainMapBaseToBt709(hdr, constants, _colorGamutMappingMode);
-            hdr *= sceneScale;
-
-            if (!float.IsFinite(hdr.X) || !float.IsFinite(hdr.Y) || !float.IsFinite(hdr.Z))
-            {
-                continue;
-            }
-
-            var samplePeak = Math.Max(hdr.X, Math.Max(hdr.Y, hdr.Z));
-            contentPeak = Math.Max(contentPeak, samplePeak);
-            peakSamples.Add(samplePeak);
-            luminanceSum += Math.Max(0.0f, (0.2126f * hdr.X) + (0.7152f * hdr.Y) + (0.0722f * hdr.Z));
-            samples++;
-        }
-
-        var average = samples > 0 ? (float)(luminanceSum / samples) : 0.0f;
-        var highPercentilePeak = CalculatePercentile(peakSamples, 0.995f);
-        var toneMapPeak = Math.Max(highPercentilePeak, contentPeak * 0.55f);
-        var fullFrameLimit = _displayConfiguration.MaxFullFrameSceneValue;
-        var adaptiveTargetPeak = _adaptiveToneMappingEnabled
-            ? CalculateAdaptiveToneMapTarget(
-                whiteScale,
-                virtualTargetPeak,
-                physicalTargetPeak,
-                average,
-                fullFrameLimit)
-            : physicalTargetPeak;
-        var globalScale = _adaptiveToneMappingEnabled
-            ? CalculateGlobalToneMapScale(adaptiveTargetPeak, toneMapPeak, average, fullFrameLimit)
-            : 1.0f;
-        return new ToneMapAnalysis(
-            contentPeak,
-            highPercentilePeak,
-            toneMapPeak,
-            average,
-            virtualTargetPeak,
-            physicalTargetPeak,
-            adaptiveTargetPeak,
-            fullFrameLimit,
-            globalScale);
-    }
-
-    private ToneMapAnalysis AnalyzeBaseHdrToneMapInput(GainMapShaderConstants constants)
-    {
-        if (_primaryAnalysisSource is null || !_primaryAnalysisSource.IsHdrEncoded)
-        {
-            return default;
-        }
-
-        var whiteScale = CalculateBaseHdrToneMapWhiteScale(constants);
-        var virtualTargetPeak = CalculateBaseHdrVirtualTargetPeak(constants, whiteScale);
-        var decodeTargetPeak = constants.SourceEncoding.X > 1.5f && constants.SourceEncoding.X < 2.5f
-            ? HlgReferenceScenePeak
-            : virtualTargetPeak;
-        var sliderTarget = _displayCapacityOverrideLog2 is not null;
-        var displayFitToneMap = _adaptiveToneMappingEnabled || sliderTarget;
-        var displayLimitedTargetPeak = EffectiveMaxSceneValue > 0.0f
-            ? Math.Min(EffectiveMaxSceneValue, virtualTargetPeak)
-            : virtualTargetPeak;
-        var physicalTargetPeak = sliderTarget && !_adaptiveToneMappingEnabled
-            ? virtualTargetPeak
-            : displayLimitedTargetPeak;
-        double luminanceSum = 0.0;
-        var contentPeak = 0.0f;
-        var samples = 0;
-        var peakSamples = new List<float>(_primaryAnalysisSource.Samples.Length);
-
-        foreach (var sample in _primaryAnalysisSource.Samples)
-        {
-            var hdr = ReconstructBaseHdrSample(sample, constants, decodeTargetPeak);
-            if (!float.IsFinite(hdr.X) || !float.IsFinite(hdr.Y) || !float.IsFinite(hdr.Z))
-            {
-                continue;
-            }
-
-            var samplePeak = Math.Max(0.0f, Math.Max(hdr.X, Math.Max(hdr.Y, hdr.Z)));
-            contentPeak = Math.Max(contentPeak, samplePeak);
-            peakSamples.Add(samplePeak);
-            luminanceSum += Math.Max(0.0f, (0.2126f * hdr.X) + (0.7152f * hdr.Y) + (0.0722f * hdr.Z));
-            samples++;
-        }
-
-        var average = samples > 0 ? (float)(luminanceSum / samples) : 0.0f;
-        var highPercentilePeak = CalculatePercentile(peakSamples, 0.995f);
-        var measuredToneMapPeak = Math.Max(highPercentilePeak, contentPeak * 0.55f);
-        var toneMapPeak = displayFitToneMap
-            ? Math.Clamp(
-                measuredToneMapPeak,
-                Math.Max(whiteScale, physicalTargetPeak),
-                Math.Max(Math.Max(virtualTargetPeak, physicalTargetPeak), whiteScale))
-            : measuredToneMapPeak;
-        var fullFrameLimit = _displayConfiguration.MaxFullFrameSceneValue;
-        var adaptiveTargetPeak = displayFitToneMap
-            ? CalculateAdaptiveToneMapTarget(
-                whiteScale,
-                virtualTargetPeak,
-                physicalTargetPeak,
-                average,
-                fullFrameLimit)
-            : physicalTargetPeak;
-        var globalScale = displayFitToneMap
-            ? CalculateSingleLayerDisplayFitMidScale(average, whiteScale, fullFrameLimit)
-            : 1.0f;
-        return new ToneMapAnalysis(
-            contentPeak,
-            highPercentilePeak,
-            toneMapPeak,
-            average,
-            virtualTargetPeak,
-            physicalTargetPeak,
-            adaptiveTargetPeak,
-            fullFrameLimit,
-            globalScale);
-    }
-
-    private float CalculateBaseHdrToneMapWhiteScale(GainMapShaderConstants constants)
-    {
-        return EffectiveViewModeForCurrentFrame == GainmapViewMode.Sdr
-            ? Math.Max(EffectiveSceneToSdrWhiteScale, 1.0f)
-            : Math.Max(CalculateBaseHdrContentWhiteScale(constants), 1.0f);
-    }
-
-    private float CalculateBaseHdrContentWhiteScale(GainMapShaderConstants constants)
-    {
-        var exposure = Math.Max(_referenceWhiteExposureScale, 0.0f);
-        return constants.SourceEncoding.X switch
-        {
-            > 4.5f => SingleLayerHdrReferenceWhiteScale * exposure,
-            > 3.5f => (constants.SourceEncoding.Y <= 0.5f ? Math.Max(constants.DisplayMapping.X, 1.0f) : 1.0f) * exposure,
-            > 2.5f => SingleLayerHdrReferenceWhiteScale * exposure,
-            > 1.5f => HlgReferenceWhiteScene * exposure,
-            _ => Math.Max(constants.DisplayMapping.X, 1.0f),
-        };
-    }
-
-    private float CalculateBaseHdrSdrPreviewScale(GainMapShaderConstants constants)
-    {
-        if (EffectiveViewModeForCurrentFrame != GainmapViewMode.Sdr)
-        {
-            return 1.0f;
-        }
-
-        return Math.Max(EffectiveSceneToSdrWhiteScale, 1.0f)
-            / Math.Max(CalculateBaseHdrContentWhiteScale(constants), 0.0001f);
-    }
-
-    private float CalculateBaseHdrVirtualTargetPeak(GainMapShaderConstants constants, float whiteScale)
-    {
-        if (EffectiveViewModeForCurrentFrame == GainmapViewMode.Sdr)
-        {
-            return Math.Max(EffectiveSceneToSdrWhiteScale, 1.0f);
-        }
-
-        if (_displayCapacityOverrideLog2 is { } overrideStops)
-        {
-            var targetNits = _displayConfiguration.SdrWhiteLevelInNits * Math.Pow(2.0, overrideStops);
-            return Math.Max((float)(targetNits / HdrColorMath.ReferenceWhiteNits), whiteScale);
-        }
-
-        if (EffectiveMaxSceneValue > 0.0f)
-        {
-            return Math.Max(EffectiveMaxSceneValue, whiteScale);
-        }
-
-        if (constants.SourceEncoding.X > 1.5f && constants.SourceEncoding.X < 2.5f)
-        {
-            return Math.Max(HlgReferenceScenePeak, whiteScale);
-        }
-
-        return Math.Max(
-            whiteScale * MathF.Pow(2.0f, Math.Max(EffectiveDisplayBoostLog2, 0.0f)),
-            whiteScale);
-    }
-
-    private Vector3 ReconstructBaseHdrSample(
-        Vector3 sample,
-        GainMapShaderConstants constants,
-        float targetScenePeak)
-    {
-        var linear = constants.SourceEncoding.X switch
-        {
-            > 4.5f => sample,
-            > 3.5f => sample,
-            > 2.5f => HdrColorMath.PqToSceneLinear(sample),
-            > 1.5f => HdrColorMath.HlgToSceneLinear(sample, targetScenePeak),
-            _ => sample,
-        };
-
-        var p709 = constants.SourceEncoding.Y switch
-        {
-            > 2.5f => HdrColorMath.ConvertProPhotoToBt709(linear, _colorGamutMappingMode),
-            > 1.5f => HdrColorMath.ConvertBt2020ToBt709(linear, _colorGamutMappingMode),
-            > 0.5f => HdrColorMath.ConvertP3ToBt709(linear, _colorGamutMappingMode),
-            _ => linear,
-        };
-
-        var mapped = constants.SourceEncoding.X > 3.5f && constants.SourceEncoding.X < 4.5f && constants.SourceEncoding.Y <= 0.5f
-            ? p709 * Math.Max(constants.DisplayMapping.X, 1.0f)
-            : p709;
-        if (constants.SourceEncoding.X > 1.5f)
-        {
-            mapped *= Math.Max(_referenceWhiteExposureScale, 0.0f);
-            mapped *= CalculateBaseHdrSdrPreviewScale(constants);
-        }
-
-        return mapped;
-    }
-
-    private static Vector3 ReadEncodedRgb(DecodedBitmap bitmap, int x, int y)
-    {
-        var index = checked(((y * bitmap.PixelWidth) + x) * bitmap.BytesPerPixel);
-        if (bitmap.PixelFormat == DecodedBitmapPixelFormat.Rgba16Float)
-        {
-            return new Vector3(
-                ReadHalfLittleEndian(bitmap.RgbaPixels, index),
-                ReadHalfLittleEndian(bitmap.RgbaPixels, index + 2),
-                ReadHalfLittleEndian(bitmap.RgbaPixels, index + 4));
-        }
-
-        if (bitmap.PixelFormat == DecodedBitmapPixelFormat.Rgba16Unorm)
-        {
-            return new Vector3(
-                ReadUInt16LittleEndian(bitmap.RgbaPixels, index) / 65535.0f,
-                ReadUInt16LittleEndian(bitmap.RgbaPixels, index + 2) / 65535.0f,
-                ReadUInt16LittleEndian(bitmap.RgbaPixels, index + 4) / 65535.0f);
-        }
-
-        return new Vector3(
-            bitmap.RgbaPixels[index] / 255.0f,
-            bitmap.RgbaPixels[index + 1] / 255.0f,
-            bitmap.RgbaPixels[index + 2] / 255.0f);
-    }
-
-    private static float ReadHalfLittleEndian(byte[] data, int offset)
-    {
-        var bits = unchecked((ushort)(data[offset] | (data[offset + 1] << 8)));
-        return (float)BitConverter.UInt16BitsToHalf(bits);
-    }
-
-    private static Vector3 ReadLinearSrgb(DecodedBitmap bitmap, int x, int y)
-    {
-        var encoded = ReadEncodedRgb(bitmap, x, y);
-        return HdrColorMath.SrgbToLinear(encoded);
-    }
-
-    private static Vector3 ReadGainMapSample(DecodedBitmap bitmap, int primaryX, int primaryY, int primaryWidth, int primaryHeight)
-    {
-        var x = Math.Clamp((int)((primaryX + 0.5f) * bitmap.PixelWidth / Math.Max(primaryWidth, 1)), 0, bitmap.PixelWidth - 1);
-        var y = Math.Clamp((int)((primaryY + 0.5f) * bitmap.PixelHeight / Math.Max(primaryHeight, 1)), 0, bitmap.PixelHeight - 1);
-        return ReadEncodedRgb(bitmap, x, y);
-    }
-
-    private static ushort ReadUInt16LittleEndian(byte[] data, int offset)
-    {
-        return (ushort)(data[offset] | (data[offset + 1] << 8));
-    }
-
-    private static float CalculateAdaptiveToneMapTarget(
-        float whiteScale,
-        float virtualTarget,
-        float physicalTarget,
-        float contentAverage,
-        float fullFrameLimit)
-    {
-        var outputTarget = Math.Clamp(physicalTarget, whiteScale, Math.Max(virtualTarget, whiteScale));
-        var headroom = Math.Max(outputTarget - whiteScale, 0.0f);
-        if (headroom <= 0.0f)
-        {
-            return outputTarget;
-        }
-
-        var averageRelativeToWhite = contentAverage / Math.Max(whiteScale, 0.0001f);
-        var aplFactor = 1.0f / (1.0f + (1.6f * Math.Max(averageRelativeToWhite - 0.18f, 0.0f)));
-        var minimumHeadroomFraction = fullFrameLimit > 0.0f && fullFrameLimit < whiteScale
-            ? 0.42f
-            : 0.28f;
-        var target = whiteScale + (headroom * Math.Max(aplFactor, minimumHeadroomFraction));
-
-        if (fullFrameLimit > 0.0f && outputTarget > whiteScale)
-        {
-            var fullFrameTarget = fullFrameLimit < whiteScale
-                ? whiteScale + (headroom * 0.42f)
-                : Math.Clamp(fullFrameLimit * 1.45f, whiteScale + (headroom * minimumHeadroomFraction), outputTarget);
-            var pressureStart = Math.Min(whiteScale * 0.55f, Math.Max(fullFrameLimit * 0.85f, whiteScale * 0.25f));
-            var fullFramePressure = Math.Clamp(
-                (contentAverage - pressureStart) / Math.Max(fullFrameLimit - pressureStart, 0.0001f),
-                0.0f,
-                1.0f);
-            target = Math.Min(target, Lerp(outputTarget, fullFrameTarget, fullFramePressure));
-        }
-
-        return Math.Clamp(target, whiteScale + (headroom * minimumHeadroomFraction), outputTarget);
-    }
-
-    private static float CalculateGlobalToneMapScale(
-        float target,
-        float toneMapPeak,
-        float contentAverage,
-        float fullFrameLimit)
-    {
-        var scale = toneMapPeak > target && toneMapPeak > 0.0f
-            ? target / toneMapPeak
-            : 1.0f;
-
-        if (fullFrameLimit > 0.0f && contentAverage > fullFrameLimit)
-        {
-            scale = Math.Min(scale, fullFrameLimit / contentAverage);
-        }
-
-        return Math.Clamp(scale, 0.02f, 1.0f);
-    }
-
-    private static float CalculateSingleLayerDisplayFitMidScale(
-        float contentAverage,
-        float whiteScale,
-        float fullFrameLimit)
-    {
-        var scale = 1.0f;
-        if (fullFrameLimit > 0.0f && contentAverage > fullFrameLimit)
-        {
-            scale = Math.Min(scale, fullFrameLimit / contentAverage);
-        }
-
-        var averageRelativeToWhite = contentAverage / Math.Max(whiteScale, 0.0001f);
-        if (averageRelativeToWhite > 0.45f)
-        {
-            scale = Math.Min(scale, 1.0f / (1.0f + (0.70f * (averageRelativeToWhite - 0.45f))));
-        }
-
-        return Math.Clamp(scale, 0.25f, 1.0f);
-    }
-
-    private static float CalculatePercentile(List<float> samples, float percentile)
-    {
-        if (samples.Count == 0)
-        {
-            return 0.0f;
-        }
-
-        samples.Sort();
-        var index = (int)MathF.Round((samples.Count - 1) * Math.Clamp(percentile, 0.0f, 1.0f));
-        return samples[Math.Clamp(index, 0, samples.Count - 1)];
-    }
-
-    private static float Lerp(float start, float end, float amount)
-    {
-        return start + ((end - start) * amount);
-    }
-
-    private static Vector4 CalculateUniformImageLayout(
-        int contentPixelWidth,
-        int contentPixelHeight,
-        float orientation,
-        int targetPixelWidth,
-        int targetPixelHeight)
-    {
-        if (contentPixelWidth <= 0 || contentPixelHeight <= 0 || targetPixelWidth <= 0 || targetPixelHeight <= 0)
-        {
-            return new Vector4(1.0f, 1.0f, 0.0f, 0.0f);
-        }
-
-        var displayedWidth = contentPixelWidth;
-        var displayedHeight = contentPixelHeight;
-        if (OrientationSwapsDimensions(orientation))
-        {
-            displayedWidth = contentPixelHeight;
-            displayedHeight = contentPixelWidth;
-        }
-
-        var contentAspect = (float)displayedWidth / displayedHeight;
-        var targetAspect = (float)targetPixelWidth / targetPixelHeight;
-        var scaleX = 1.0f;
-        var scaleY = 1.0f;
-        if (targetAspect > contentAspect)
-        {
-            scaleX = contentAspect / targetAspect;
-        }
-        else
-        {
-            scaleY = targetAspect / contentAspect;
-        }
-
-        return new Vector4(
-            scaleX,
-            scaleY,
-            (1.0f - scaleX) * 0.5f,
-            (1.0f - scaleY) * 0.5f);
-    }
-
-    private static bool OrientationSwapsDimensions(float orientation)
-    {
-        return orientation is >= 4.5f and < 8.5f;
-    }
-
-    private string BuildOutputSummary()
-    {
-        var colorSpace = _scRgbColorSpaceApplied
-            ? "scRGB swap chain"
-            : _scRgbColorSpaceAvailable
-                ? "scRGB color space available but not applied"
-                : "scRGB color space unavailable";
-        var capacityOverride = _displayCapacityOverrideLog2 is { } value
-            ? $"; capacity override {value:0.###} stops target {_displayConfiguration.SdrWhiteLevelInNits * Math.Pow(2.0, value):0} nits"
-            : string.Empty;
-        return $"{_panelBindingStatus}; {_swapChainTransformStatus}; {colorSpace}; color gamut {BuildColorGamutMappingSummary()}{capacityOverride}; {_displayConfiguration.RenderSummary}";
-    }
-
-    private string BuildLayoutSummary()
-    {
-        var layout = CalculateUniformImageLayout(
-            _contentPixelWidth,
-            _contentPixelHeight,
-            _contentOrientation,
-            _pixelWidth,
-            _pixelHeight);
-        return $"source {_contentPixelWidth}x{_contentPixelHeight}, fit {layout.X:0.###}x{layout.Y:0.###}+{layout.Z:0.###},{layout.W:0.###}";
-    }
-
-    private string BuildGainMapSummary()
-    {
-        var modeLabel = _viewMode switch
-        {
-            GainmapViewMode.Sdr => "SDR",
-            GainmapViewMode.Adaptive => "Adaptive",
-            GainmapViewMode.AlternateImage => "Alternate Image",
-            GainmapViewMode.GainMap => "Gain Map",
-            _ => "Adaptive",
-        };
-        var toneMap = _toneMappingEnabledForCurrentFrame && _toneMapAnalysis.VirtualTargetPeak > 0.0f
-            ? $", tone gain-map global scale {_toneMapAnalysis.GlobalScale:0.###}x, target {_toneMapAnalysis.AdaptiveTargetPeak:0.###}/{_toneMapAnalysis.PhysicalTargetPeak:0.###} physical ({CalculateToneMapCompressionRatio():0.##}x virtual {_toneMapAnalysis.VirtualTargetPeak:0.###}), full-frame {_toneMapAnalysis.FullFrameLimit:0.###}, content max/p99.5/tone/avg {_toneMapAnalysis.ContentPeak:0.###}/{_toneMapAnalysis.HighPercentilePeak:0.###}/{_toneMapAnalysis.ToneMapPeak:0.###}/{_toneMapAnalysis.ContentAverage:0.###}"
-            : ", tone off";
-        var baseGamut = _gainMapConstants.GainMapControl.Z switch
-        {
-            > 1.5f => "BT.2020",
-            > 0.5f => "Display P3",
-            _ => "BT.709/sRGB",
-        };
-        var baseTransfer = _gainMapConstants.SourceEncoding.X is > 0.5f and < 1.5f ? "BT.709" : "sRGB";
-        var gainSampleStats = BuildGainSampleStats();
-        return $"mode {modeLabel}, base {baseGamut}/{baseTransfer}, gain min {FormatVector3(_gainMapConstants.GainMapMin)}, max {FormatVector3(_gainMapConstants.GainMapMax)}, gamma {FormatVector3(_gainMapConstants.Gamma)}, cap {_gainMapConstants.HdrCapacity.X:0.###}-{_gainMapConstants.HdrCapacity.Y:0.###}, weight {CalculateGainMapWeightForStatus():0.###}, scene scale {CalculateGainMapSceneScale(_gainMapConstants):0.###}x, white scale {_displayConfiguration.SceneToSdrWhiteScale:0.###}x{gainSampleStats}{toneMap}";
-    }
-
-    private string BuildColorGamutMappingSummary()
-    {
-        return _colorGamutMappingMode switch
-        {
-            ColorGamutMappingMode.Clip => "clip",
-            _ => "managed",
-        };
-    }
-
-    private static string FormatVector3(Vector4 value)
-    {
-        return $"[{value.X:0.###}, {value.Y:0.###}, {value.Z:0.###}]";
-    }
-
-    private string BuildGainSampleStats()
-    {
-        if (_gainMapAnalysisSource is not { Samples.Length: > 0 } analysis)
-        {
-            return string.Empty;
-        }
-
-        var samples = analysis.Samples;
-        var luma = new float[samples.Length];
-        for (var i = 0; i < samples.Length; i++)
-        {
-            var g = samples[i].Gain;
-            luma[i] = MathF.Max(MathF.Max(g.X, g.Y), g.Z);
-        }
-        Array.Sort(luma);
-        float Percentile(float fraction)
-        {
-            var idx = Math.Clamp((int)MathF.Round(fraction * (luma.Length - 1)), 0, luma.Length - 1);
-            return luma[idx];
-        }
-        return $", gain sample min/p50/p99/max {luma[0]:0.###}/{Percentile(0.5f):0.###}/{Percentile(0.99f):0.###}/{luma[^1]:0.###}";
-    }
-
-    private string BuildBaseImageMappingSummary()
-    {
-        var transfer = _gainMapConstants.SourceEncoding.X switch
-        {
-            > 4.5f => "scene-linear scRGB",
-            > 3.5f => "linear scRGB",
-            > 2.5f => "PQ",
-            > 1.5f => "HLG",
-            _ => "SDR"
-        };
-        if (transfer == "SDR")
-        {
-            var sdrPrimaries = _gainMapConstants.SourceEncoding.Y > 1.5f
-                ? _gainMapConstants.SourceEncoding.Y > 2.5f ? "ProPhoto RGB to scRGB" : "BT.2020 to scRGB"
-                : _gainMapConstants.SourceEncoding.Y > 0.5f ? "Display P3 to scRGB" : "sRGB/BT.709";
-            return $"base map SDR {sdrPrimaries}, white scale {EffectiveSceneToSdrWhiteScale:0.###}x";
-        }
-
-        var targetScenePeak = CalculateBaseHdrVirtualTargetPeak(_gainMapConstants, CalculateBaseHdrToneMapWhiteScale(_gainMapConstants));
-        var primaries = transfer is "linear scRGB" or "scene-linear scRGB"
-            ? "working scRGB (P709, extended range)"
-            : _gainMapConstants.SourceEncoding.Y > 2.5f
-                ? "ProPhoto RGB to scRGB"
-                : _gainMapConstants.SourceEncoding.Y > 1.5f
-                    ? "BT.2020 to scRGB"
-                    : _gainMapConstants.SourceEncoding.Y > 0.5f
-                        ? "Display P3 to scRGB"
-                        : "source primaries";
-        var singleLayerDisplayFit = IsSingleLayerDisplayFitToneMapEnabled();
-        var toneMode = singleLayerDisplayFit
-            ? "display-fit highlight rolloff"
-            : _displayCapacityOverrideLog2 is not null ? "manual peak" : "system auto";
-        var scaleLabel = singleLayerDisplayFit ? "midtone scale" : "global scale";
-        var toneMap = _toneMappingEnabledForCurrentFrame && _toneMapAnalysis.VirtualTargetPeak > 0.0f
-            ? $", tone single-layer {toneMode} {scaleLabel} {_toneMapAnalysis.GlobalScale:0.###}x, target {_toneMapAnalysis.AdaptiveTargetPeak:0.###}/{_toneMapAnalysis.PhysicalTargetPeak:0.###} physical ({CalculateToneMapCompressionRatio():0.##}x virtual {_toneMapAnalysis.VirtualTargetPeak:0.###}), full-frame {_toneMapAnalysis.FullFrameLimit:0.###}, content max/p99.5/tone/avg {_toneMapAnalysis.ContentPeak:0.###}/{_toneMapAnalysis.HighPercentilePeak:0.###}/{_toneMapAnalysis.ToneMapPeak:0.###}/{_toneMapAnalysis.ContentAverage:0.###}"
-            : ", tone off";
-        var modeSummary = _viewMode == GainmapViewMode.GainMap
-            ? "Adaptive (Gain Map unavailable: no gain map)"
-            : EffectiveViewModeForCurrentFrame.ToString();
-        var exposureReferenceWhite = transfer is "PQ" or "HLG" ? 203.0f : 80.0f;
-        var exposureSummary = Math.Abs(_referenceWhiteExposureScale - 1.0f) > 0.001f
-            ? $", exposure {_referenceWhiteExposureScale:0.###}x (diffuse white {_referenceWhiteExposureScale * exposureReferenceWhite:0} nits)"
-            : string.Empty;
-        var sdrClampSummary = EffectiveViewModeForCurrentFrame == GainmapViewMode.Sdr && _primaryAnalysisSource?.IsHdrEncoded == true
-            ? ", SDR clamps HDR source to SDR white"
-            : string.Empty;
-        return $"base map {modeSummary} {transfer} {primaries}, target {targetScenePeak:0.###} scene ({targetScenePeak * 80.0f:0} nits){exposureSummary}{sdrClampSummary}{toneMap}";
-    }
-
-    private bool IsSingleLayerDisplayFitToneMapEnabled()
-    {
-        return _gainMapAnalysisSource is null
-            && _primaryAnalysisSource?.IsHdrEncoded == true
-            && (_adaptiveToneMappingEnabled || _displayCapacityOverrideLog2 is not null);
-    }
-
-    private float CalculateToneMapCompressionRatio()
-    {
-        return _toneMapAnalysis.VirtualTargetPeak > 0.0f
-            ? _toneMapAnalysis.AdaptiveTargetPeak / _toneMapAnalysis.VirtualTargetPeak
-            : 1.0f;
-    }
-
-    private float CalculateGainMapWeightForStatus()
-    {
-        var minCapacity = _gainMapConstants.HdrCapacity.X;
-        var maxCapacity = _gainMapConstants.HdrCapacity.Y;
-        if (maxCapacity <= minCapacity)
-        {
-            return Math.Clamp(_gainMapConstants.GainMapControl.X, 0.0f, 1.0f);
-        }
-
-        var explicitWeight = Math.Clamp(_gainMapConstants.GainMapControl.X, 0.0f, 1.0f);
-        var adaptiveWeight = Math.Clamp((EffectiveDisplayBoostLog2 - minCapacity) / (maxCapacity - minCapacity), 0.0f, 1.0f);
-        return explicitWeight * adaptiveWeight;
-    }
-
-    private float CalculateGainMapSceneScale(GainMapShaderConstants constants)
-    {
-        var exposureScale = Math.Max(_referenceWhiteExposureScale, 0.0f);
-        if (constants.GainMapControl.Y <= 0.5f)
-        {
-            return (203.0f / 80.0f) * exposureScale;
-        }
-
-        return Math.Max(EffectiveSceneToSdrWhiteScale, 1.0f) * exposureScale;
-    }
-
-    private GainmapViewMode EffectiveViewModeForCurrentFrame => _viewMode == GainmapViewMode.GainMap && _gainMapAnalysisSource is null
-        ? GainmapViewMode.Adaptive
-        : _viewMode;
-
-    private float EffectiveDisplayBoostLog2 => EffectiveViewModeForCurrentFrame switch
-    {
-        GainmapViewMode.Sdr => 0.0f,
-        GainmapViewMode.AlternateImage => Math.Max(_gainMapConstants.HdrCapacity.Y, _displayConfiguration.MaxDisplayBoostLog2),
-        _ => _displayCapacityOverrideLog2 ?? _displayConfiguration.MaxDisplayBoostLog2,
-    };
-
-    private float EffectiveMaxSceneValue => EffectiveViewModeForCurrentFrame == GainmapViewMode.Sdr
-        ? CalculateSdrModeMaxSceneValue()
-        : EffectiveViewModeForCurrentFrame == GainmapViewMode.AlternateImage
-            ? 0.0f
-        : _displayCapacityOverrideLog2 is null ? _displayConfiguration.MaxSceneValue : 0.0f;
-
-    private float CalculateSdrModeMaxSceneValue()
-    {
-        var whiteScale = Math.Max(EffectiveSceneToSdrWhiteScale, 1.0f);
-        if (_primaryAnalysisSource?.IsHdrEncoded == true)
-        {
-            return whiteScale;
-        }
-
-        // For a wide-gamut (Display P3 / BT.2020 / ProPhoto) SDR base image, the shader's
-        // gamut conversion to BT.709 / scRGB produces channel values ABOVE the
-        // SDR white scale for colours that sit outside the BT.709 hull (a fully
-        // saturated P3 red becomes ~1.22 before the white-scale multiply). If we
-        // cap ClampToDisplayPeak at the white scale, those out-of-gamut channels
-        // are clipped back onto BT.709, collapsing the wide-gamut signal so a P3
-        // background and an sRGB foreground become almost indistinguishable.
-        // Allow headroom up to the display's scene capability so the wide-gamut
-        // channels survive to the scRGB swap chain.
-        var gamut = _primaryAnalysisSource?.ColorGamut ?? GainMapColorGamut.Unknown;
-        if (gamut is GainMapColorGamut.DisplayP3 or GainMapColorGamut.Bt2100 or GainMapColorGamut.ProPhoto)
-        {
-            var displayCeiling = _displayConfiguration.MaxSceneValue;
-            return displayCeiling > whiteScale ? displayCeiling : whiteScale;
-        }
-
-        return whiteScale;
-    }
-
-    private float EffectiveSceneToSdrWhiteScale => _displayConfiguration.SceneToSdrWhiteScale;
-
-    private void EnsureRenderTargetView()
-    {
-        if (_renderTargetView is null && _device is not null && _swapChain is not null)
-        {
-            CreateRenderTargetView();
-        }
-    }
-
-    private ID3D11Texture2D GetOrCreateFrameAnalysisStagingTexture()
-    {
-        // Reuse the CPU-readable staging texture across frames; only rebuild it
-        // when the swap-chain size changes. Recreating it every present (it is
-        // hit on every load / resize / zoom commit) was pure churn.
-        if (_frameAnalysisStagingTexture is not null
-            && _frameAnalysisStagingWidth == _pixelWidth
-            && _frameAnalysisStagingHeight == _pixelHeight)
-        {
-            return _frameAnalysisStagingTexture;
-        }
-
-        _frameAnalysisStagingTexture?.Dispose();
-        _frameAnalysisStagingTexture = null;
-
-        var description = new Texture2DDescription(
-            Format.R16G16B16A16_Float,
-            checked((uint)_pixelWidth),
-            checked((uint)_pixelHeight),
-            arraySize: 1,
-            mipLevels: 1,
-            BindFlags.None,
-            ResourceUsage.Staging,
-            CpuAccessFlags.Read,
-            sampleCount: 1,
-            sampleQuality: 0,
-            ResourceOptionFlags.None);
-
-        var texture = _device!.CreateTexture2D(description);
-        _frameAnalysisStagingTexture = texture;
-        _frameAnalysisStagingWidth = _pixelWidth;
-        _frameAnalysisStagingHeight = _pixelHeight;
-        return texture;
-    }
-
-    private void ReleaseFrameAnalysisStagingTexture()
-    {
-        _frameAnalysisStagingTexture?.Dispose();
-        _frameAnalysisStagingTexture = null;
-        _frameAnalysisStagingWidth = 0;
-        _frameAnalysisStagingHeight = 0;
-    }
-
-    /// <summary>
-    /// Rows that <see cref="AnalyzeBackBuffer"/> reads: the sparse sampling grid
-    /// (same stepY formula as the sampling loop) plus the top/middle/bottom
-    /// probe rows. Only these rows are copied into the staging texture.
-    /// </summary>
-    private static SortedSet<int> GetAnalysisRowIndices(int pixelHeight)
-    {
-        var stepY = Math.Max(1, pixelHeight / 64);
-        var rows = new SortedSet<int>();
-        for (var y = 0; y < pixelHeight; y += stepY)
-        {
-            rows.Add(y);
-        }
-
-        rows.Add(Math.Max(0, pixelHeight / 20));
-        rows.Add(pixelHeight / 2);
-        rows.Add(Math.Max(0, pixelHeight - (pixelHeight / 20) - 1));
-        return rows;
-    }
-
-    private FrameAnalysis AnalyzeBackBuffer()
-    {
-        if (_device is null || _context is null || _swapChain is null || _pixelWidth <= 0 || _pixelHeight <= 0)
-        {
-            return new FrameAnalysis(false, 0.0f, "frame stats unavailable");
-        }
-
-        try
-        {
-            using var backBuffer = _swapChain.GetBuffer<ID3D11Texture2D>(0);
-            var stagingTexture = GetOrCreateFrameAnalysisStagingTexture();
-            // Copy only the rows the sampler below reads. A full CopyResource
-            // moved the entire FP16 back buffer (~66 MB at 4K) into CPU-readable
-            // memory on every present, while the sparse sampling grid plus the
-            // three probe points only touch ~70 rows.
-            foreach (var row in GetAnalysisRowIndices(_pixelHeight))
-            {
-                _context.CopySubresourceRegion(
-                    stagingTexture, 0, 0, (uint)row, 0,
-                    backBuffer, 0,
-                    new Box(0, row, 0, _pixelWidth, row + 1, 1));
-            }
-
-            _context.Map(stagingTexture, 0, MapMode.Read, Vortice.Direct3D11.MapFlags.None, out var mappedResource).CheckError();
-            try
-            {
-                var stepX = Math.Max(1, _pixelWidth / 64);
-                var stepY = Math.Max(1, _pixelHeight / 64);
-                double sum = 0.0;
-                var max = 0.0f;
-                var samples = 0;
-
-                for (var y = 0; y < _pixelHeight; y += stepY)
-                {
-                    var row = IntPtr.Add(mappedResource.DataPointer, checked(y * (int)mappedResource.RowPitch));
-                    for (var x = 0; x < _pixelWidth; x += stepX)
-                    {
-                        var pixel = IntPtr.Add(row, checked(x * 8));
-                        var r = ReadHalf(pixel, 0);
-                        var g = ReadHalf(pixel, 2);
-                        var b = ReadHalf(pixel, 4);
-                        if (!float.IsFinite(r) || !float.IsFinite(g) || !float.IsFinite(b))
-                        {
-                            continue;
-                        }
-
-                        var luminance = Math.Max(0.0f, (0.2126f * r) + (0.7152f * g) + (0.0722f * b));
-                        sum += luminance;
-                        max = Math.Max(max, Math.Max(r, Math.Max(g, b)));
-                        samples++;
-                    }
-                }
-
-                var average = samples > 0 ? (float)(sum / samples) : 0.0f;
-                var visible = max > 0.002f || average > 0.0005f;
-                var top = SampleLuminance(mappedResource.DataPointer, mappedResource.RowPitch, _pixelWidth / 2, Math.Max(0, _pixelHeight / 20));
-                var middle = SampleLuminance(mappedResource.DataPointer, mappedResource.RowPitch, _pixelWidth / 2, _pixelHeight / 2);
-                var bottom = SampleLuminance(mappedResource.DataPointer, mappedResource.RowPitch, _pixelWidth / 2, Math.Max(0, _pixelHeight - (_pixelHeight / 20) - 1));
-                return new FrameAnalysis(visible, max, $"frame avg {average:0.###}, max {max:0.###}, y {top:0.###}/{middle:0.###}/{bottom:0.###}");
-            }
-            finally
-            {
-                _context.Unmap(stagingTexture, 0);
-            }
-        }
-        catch (Exception ex)
-        {
-            return new FrameAnalysis(true, 0.0f, $"frame stats unavailable: {ex.GetType().Name}");
-        }
-    }
-
-    private static float ReadHalf(IntPtr pixel, int byteOffset)
-    {
-        var bits = unchecked((ushort)Marshal.ReadInt16(pixel, byteOffset));
-        return (float)BitConverter.UInt16BitsToHalf(bits);
-    }
-
-    private static float SampleLuminance(IntPtr dataPointer, uint rowPitch, int x, int y)
-    {
-        var row = IntPtr.Add(dataPointer, checked(y * (int)rowPitch));
-        var pixel = IntPtr.Add(row, checked(x * 8));
-        var r = ReadHalf(pixel, 0);
-        var g = ReadHalf(pixel, 2);
-        var b = ReadHalf(pixel, 4);
-        return Math.Max(0.0f, (0.2126f * r) + (0.7152f * g) + (0.0722f * b));
-    }
-
-    private static string BuildMissingResourceList(params (string Name, bool Missing)[] resources)
-    {
-        var missing = resources
-            .Where(resource => resource.Missing)
-            .Select(resource => resource.Name);
-        return string.Join(", ", missing);
-    }
-
-    private static string DescribeWicPixelFormat(Guid pixelFormat)
-    {
-        if (pixelFormat == WicPixelFormat.Format64bppPRGBA)
-        {
-            return "64bpp PRGBA";
-        }
-
-        if (pixelFormat == WicPixelFormat.Format64bppRGBA)
-        {
-            return "64bpp RGBA";
-        }
-
-        if (pixelFormat == WicPixelFormat.Format64bppPRGBAHalf)
-        {
-            return "64bpp PRGBA half";
-        }
-
-        if (pixelFormat == WicPixelFormat.Format64bppRGBAHalf)
-        {
-            return "64bpp RGBA half";
-        }
-
-        if (pixelFormat == WicPixelFormat.Format32bppPRGBA)
-        {
-            return "32bpp PRGBA";
-        }
-
-        if (pixelFormat == WicPixelFormat.Format32bppRGBA)
-        {
-            return "32bpp RGBA";
-        }
-
-        if (pixelFormat == WicPixelFormat.Format32bppR10G10B10A2HDR10)
-        {
-            return "32bpp R10G10B10A2 HDR10";
-        }
-
-        return pixelFormat.ToString("D");
-    }
-
-    private static bool IsFloatingPointWicPixelFormat(Guid pixelFormat)
-    {
-        return pixelFormat == WicPixelFormat.Format64bppRGBAHalf
-            || pixelFormat == WicPixelFormat.Format64bppPRGBAHalf
-            || pixelFormat == WicPixelFormat.Format64bppRGBHalf
-            || pixelFormat == WicPixelFormat.Format48bppRGBHalf
-            || pixelFormat == WicPixelFormat.Format96bppRGBFloat
-            || pixelFormat == WicPixelFormat.Format128bppRGBAFloat
-            || pixelFormat == WicPixelFormat.Format128bppPRGBAFloat
-            || pixelFormat == WicPixelFormat.Format128bppRGBFloat;
     }
 
     private void ReleaseD2DBaseImageResources()
@@ -2972,6 +1506,9 @@ float4 BaseImagePSMain(VertexOutput input) : SV_TARGET
         _gainMapConstants = default;
         _toneMapAnalysis = default;
         _toneMappingEnabledForCurrentFrame = false;
+        InvalidateToneMapAnalysis();
+        _frameVerificationPending = true;
+        _lastFrameAnalysis = new FrameAnalysis(false, 0.0f, "frame verification pending");
         _contentPixelWidth = 0;
         _contentPixelHeight = 0;
         _contentOrientation = 1.0f;
@@ -2980,75 +1517,6 @@ float4 BaseImagePSMain(VertexOutput input) : SV_TARGET
         _loadedGainMapMode = false;
         _loadedDecodeMaxPixelSize = null;
     }
-
-    private bool TryBindSwapChainToPanel()
-    {
-        if (_panel is null || _swapChain is null)
-        {
-            _panelBindingStatus = "WinUI swap chain bind skipped";
-            LastRenderStatus = "Swap chain panel bind skipped: panel or swap chain missing";
-            return false;
-        }
-
-        try
-        {
-            SetSwapChainOnPanel(_panel, _swapChain.NativePointer);
-            _panelBindingStatus = "WinUI swap chain bound";
-            IsSwapChainPanelBound = true;
-            return true;
-        }
-        catch (Exception ex)
-        {
-            _panelBindingStatus = $"WinUI swap chain bind failed: {ex.GetType().Name}";
-            IsSwapChainPanelBound = false;
-            LastRenderStatus = $"Swap chain panel bind failed: {ex.GetType().Name}: {ex.Message}";
-            return false;
-        }
-    }
-
-    private void DetachSwapChainFromPanel()
-    {
-        if (_panel is null)
-        {
-            return;
-        }
-
-        try
-        {
-            SetSwapChainOnPanel(_panel, IntPtr.Zero);
-            IsSwapChainPanelBound = false;
-        }
-        catch
-        {
-            // Best-effort cleanup; the panel may already be leaving the XAML tree.
-        }
-    }
-
-    private static void SetSwapChainOnPanel(SwapChainPanel panel, IntPtr swapChain)
-    {
-        var unknown = Marshal.GetIUnknownForObject(panel);
-        var panelNative = IntPtr.Zero;
-        try
-        {
-            Marshal.ThrowExceptionForHR(Marshal.QueryInterface(unknown, in WinUiSwapChainPanelNativeGuid, out panelNative));
-            var vtable = Marshal.ReadIntPtr(panelNative);
-            var setSwapChainPointer = Marshal.ReadIntPtr(vtable, IntPtr.Size * 3);
-            var setSwapChain = Marshal.GetDelegateForFunctionPointer<SetSwapChainDelegate>(setSwapChainPointer);
-            Marshal.ThrowExceptionForHR(setSwapChain(panelNative, swapChain));
-        }
-        finally
-        {
-            if (panelNative != IntPtr.Zero)
-            {
-                Marshal.Release(panelNative);
-            }
-
-            Marshal.Release(unknown);
-        }
-    }
-
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
-    private delegate int SetSwapChainDelegate(IntPtr panelNative, IntPtr swapChain);
 
     private readonly record struct FrameAnalysis(bool HasVisiblePixels, float MaxSceneValue, string Summary);
 
