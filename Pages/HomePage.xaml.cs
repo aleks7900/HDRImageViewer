@@ -785,6 +785,7 @@ public sealed partial class HomePage : Page
         ImageSurface.Visibility = Visibility.Visible;
         _presentedImageWidth = 0.0;
         _presentedImageHeight = 0.0;
+        ClearLayoutScrollOverride();
         HideFallbackImageLayer();
 
         var renderStatus = string.Empty;
@@ -1774,6 +1775,7 @@ public sealed partial class HomePage : Page
         try
         {
             ApplyImageSurfaceSize(targetWidth, targetHeight);
+            ImageScroller?.UpdateLayout();
         }
         finally
         {
@@ -1818,12 +1820,11 @@ public sealed partial class HomePage : Page
             _isZoomCommitInProgress = true;
             try
             {
-                ClearSwapChainZoomPreviewTransform();
                 await PresentViewportAsync(cancellationToken);
             }
             finally
             {
-                _isZoomPreviewActive = false;
+                EndSwapChainZoomPreview();
                 _isZoomCommitInProgress = false;
                 _suppressSwapChainSizeChangedForZoom = false;
             }
@@ -2504,6 +2505,7 @@ public sealed partial class HomePage : Page
 
         var horizontalOffset = Math.Max(0.0, (ImageViewport.Width - PreviewSurface.ActualWidth) / 2.0);
         var verticalOffset = Math.Max(0.0, (ImageViewport.Height - PreviewSurface.ActualHeight) / 2.0);
+        SetLayoutScrollOverride(horizontalOffset, verticalOffset);
         ImageScroller.ChangeView(horizontalOffset, verticalOffset, null, true);
     }
 
@@ -2651,10 +2653,13 @@ public sealed partial class HomePage : Page
         var imageTop = Math.Max(0.0, (ImageViewport.Height - ImageSurface.Height) / 2.0);
         var viewportX = Math.Clamp(anchorViewportX, 0.0, Math.Max(0.0, PreviewSurface.ActualWidth));
         var viewportY = Math.Clamp(anchorViewportY, 0.0, Math.Max(0.0, PreviewSurface.ActualHeight));
+        var maxScrollX = Math.Max(0.0, ImageViewport.Width - PreviewSurface.ActualWidth);
+        var maxScrollY = Math.Max(0.0, ImageViewport.Height - PreviewSurface.ActualHeight);
         var targetOffsetX = imageLeft + (ImageSurface.Width * Math.Clamp(anchorX, 0.0, 1.0)) - viewportX;
         var targetOffsetY = imageTop + (ImageSurface.Height * Math.Clamp(anchorY, 0.0, 1.0)) - viewportY;
-        targetOffsetX = Math.Clamp(targetOffsetX, 0.0, ImageScroller.ScrollableWidth);
-        targetOffsetY = Math.Clamp(targetOffsetY, 0.0, ImageScroller.ScrollableHeight);
+        targetOffsetX = Math.Clamp(targetOffsetX, 0.0, maxScrollX);
+        targetOffsetY = Math.Clamp(targetOffsetY, 0.0, maxScrollY);
+        SetLayoutScrollOverride(targetOffsetX, targetOffsetY);
         ImageScroller.ChangeView(targetOffsetX, targetOffsetY, null, disableAnimation: true);
     }
 

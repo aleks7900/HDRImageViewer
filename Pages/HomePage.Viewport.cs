@@ -17,6 +17,8 @@ public sealed partial class HomePage
     private bool _isUpdatingSwapChainHostLayout;
     private double _presentedImageWidth;
     private double _presentedImageHeight;
+    private double? _layoutScrollX;
+    private double? _layoutScrollY;
 
     private void EnsureViewportPresentTimer()
     {
@@ -38,6 +40,11 @@ public sealed partial class HomePage
 
     private void ImageScroller_ViewChanged(object sender, ScrollViewerViewChangedEventArgs e)
     {
+        if (!_isZoomPreviewActive && !e.IsIntermediate)
+        {
+            ClearLayoutScrollOverride();
+        }
+
         if (_isZoomPreviewActive
             || !ViewModel.HasImage
             || HdrSwapChainHost.Visibility != Visibility.Visible)
@@ -191,8 +198,8 @@ public sealed partial class HomePage
             imageHeight,
             contentWidth,
             contentHeight,
-            ImageScroller?.HorizontalOffset ?? 0.0,
-            ImageScroller?.VerticalOffset ?? 0.0);
+            _layoutScrollX ?? ImageScroller?.HorizontalOffset ?? 0.0,
+            _layoutScrollY ?? ImageScroller?.VerticalOffset ?? 0.0);
         if (!layout.IsValid)
         {
             return false;
@@ -274,37 +281,35 @@ public sealed partial class HomePage
         double anchorViewportX,
         double anchorViewportY)
     {
-        if (SwapChainZoomPreviewTransform is null
-            || HdrSwapChainHost.Visibility != Visibility.Visible
-            || _presentedImageWidth <= 0.0
-            || _presentedImageHeight <= 0.0)
+        if (HdrSwapChainHost.Visibility != Visibility.Visible)
         {
             return;
         }
 
-        if (ViewerViewportMath.ImageFitsInPreview(
+        _ = anchorViewportX;
+        _ = anchorViewportY;
+        ClearSwapChainZoomPreviewTransform();
+        ApplySwapChainHostPlacement(targetImageWidth, targetImageHeight);
+        if (!ViewerViewportMath.ImageFitsInPreview(
             targetImageWidth,
             targetImageHeight,
             PreviewSurface.ActualWidth,
             PreviewSurface.ActualHeight))
         {
-            ClearSwapChainZoomPreviewTransform();
-            ApplySwapChainHostPlacement(targetImageWidth, targetImageHeight);
-            return;
+            _ = PresentViewportAsync(_lifetime.Token);
         }
+    }
 
-        ApplySwapChainHostPlacement(_presentedImageWidth, _presentedImageHeight);
-        var scaleX = ViewerViewportMath.CalculateZoomPreviewScale(_presentedImageWidth, targetImageWidth);
-        var scaleY = ViewerViewportMath.CalculateZoomPreviewScale(_presentedImageHeight, targetImageHeight);
-        var scale = (scaleX + scaleY) * 0.5;
-        var origin = ViewerViewportMath.CalculateZoomPreviewOrigin(
-            anchorViewportX,
-            anchorViewportY,
-            PreviewSurface.ActualWidth,
-            PreviewSurface.ActualHeight);
-        HdrSwapChainHost.RenderTransformOrigin = new Windows.Foundation.Point(origin.X, origin.Y);
-        SwapChainZoomPreviewTransform.ScaleX = scale;
-        SwapChainZoomPreviewTransform.ScaleY = scale;
+    private void SetLayoutScrollOverride(double scrollX, double scrollY)
+    {
+        _layoutScrollX = scrollX;
+        _layoutScrollY = scrollY;
+    }
+
+    private void ClearLayoutScrollOverride()
+    {
+        _layoutScrollX = null;
+        _layoutScrollY = null;
     }
 
     private void ClearSwapChainZoomPreviewTransform()
