@@ -86,6 +86,7 @@ public sealed partial class D3D11HdrRenderPipeline
         _swapChain = _factory.CreateSwapChainForComposition(_device, description, null);
         _swapChain2 = _swapChain.QueryInterfaceOrNull<IDXGISwapChain2>();
         _swapChain3 = _swapChain.QueryInterfaceOrNull<IDXGISwapChain3>();
+        _frameVerificationPending = true;
         ConfigureScRgbColorSpace();
         ConfigureSwapChainPanelScale();
 
@@ -117,6 +118,7 @@ public sealed partial class D3D11HdrRenderPipeline
 
         _pixelWidth = pixelWidth;
         _pixelHeight = pixelHeight;
+        _frameVerificationPending = true;
         ConfigureScRgbColorSpace();
         ConfigureSwapChainPanelScale();
         if (!TryBindSwapChainToPanel())

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Sized the HDR swap chain to the visible preview viewport instead of the zoomed logical image, and pan/zoom now update shader `ImageLayout` without `ResizeBuffers`.
+- Cached DXGI/EDID display capability per monitor so zoom and slider updates do not re-enumerate adapters.
+- Wired `FolderImageIndexCache` into folder navigation and removed the leftover per-image forced Gen-2 GC.
+- Shared adjacent-image preloads now cancel through `SharedAsyncOperation` instead of the first caller's token.
+
 ## 1.0.29.0 - 2026-07-21
 
 - Added a Windows-style image context menu with Save As, Copy, Copy as Path, File Info, and recycle-bin Delete actions, including the matching keyboard shortcuts. Copy publishes both bitmap and storage-item clipboard formats for direct pasting into PowerPoint, File Info toggles the existing inspector without replaying its show animation, and deletion safely selects an adjacent image or clears the viewer when no images remain.

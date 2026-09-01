@@ -9,7 +9,7 @@ public static class ImagePreloadCache
     private static readonly ConcurrentDictionary<string, CacheEntry> s_cache = new(StringComparer.OrdinalIgnoreCase);
     private static readonly ConcurrentDictionary<string, long> s_lastAccessTicks = new(StringComparer.OrdinalIgnoreCase);
     private static readonly ConcurrentDictionary<string, SharedAsyncOperation<ImageLoadResult>> s_inFlightLoads = new(StringComparer.OrdinalIgnoreCase);
-    private static readonly ConcurrentDictionary<string, Lazy<Task>> s_inFlightPreloads = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly ConcurrentDictionary<string, SharedAsyncOperation<object?>> s_inFlightPreloads = new(StringComparer.OrdinalIgnoreCase);
 
     public static async Task<ImageLoadResult> GetLoadResultAsync(
         string path,
@@ -138,36 +138,73 @@ public static class ImagePreloadCache
 
     public static async Task PreloadAsync(string path, int? maxPixelSize = null, CancellationToken cancellationToken = default)
     {
-        // Deduplicate identical concurrent preloads. The shared decode runs
-        // under the first requester's token; if that owner cancels the shared
-        // work while we still want it, retry as the new owner.
         var key = $"{path}|{maxPixelSize?.ToString() ?? "full"}";
         while (true)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var lazy = s_inFlightPreloads.GetOrAdd(key, _ => new Lazy<Task>(() => PreloadCoreAsync(path, maxPixelSize, cancellationToken)));
-            var preloadTask = lazy.Value;
-            _ = preloadTask.ContinueWith(
-                _ => s_inFlightPreloads.TryRemove(new KeyValuePair<string, Lazy<Task>>(key, lazy)),
-                CancellationToken.None,
-                TaskContinuationOptions.ExecuteSynchronously,
-                TaskScheduler.Default);
+            var candidate = new SharedAsyncOperation<object?>(
+                token => PreloadCoreAsSharedAsync(path, maxPixelSize, token));
+            var operation = s_inFlightPreloads.GetOrAdd(key, candidate);
+            var ownsOperation = ReferenceEquals(candidate, operation);
+            if (!ownsOperation)
+            {
+                candidate.Dispose();
+            }
+
+            if (operation.IsAbandoned)
+            {
+                s_inFlightPreloads.TryRemove(
+                    new KeyValuePair<string, SharedAsyncOperation<object?>>(key, operation));
+                continue;
+            }
+
+            Task<object?> waitTask;
             try
             {
-                await preloadTask.WaitAsync(cancellationToken);
+                waitTask = operation.WaitAsync(cancellationToken);
+            }
+            catch (ObjectDisposedException)
+            {
+                continue;
+            }
+
+            if (ownsOperation)
+            {
+                _ = operation.Completion.ContinueWith(
+                    _ =>
+                    {
+                        s_inFlightPreloads.TryRemove(
+                            new KeyValuePair<string, SharedAsyncOperation<object?>>(key, operation));
+                        operation.Dispose();
+                    },
+                    CancellationToken.None,
+                    TaskContinuationOptions.ExecuteSynchronously,
+                    TaskScheduler.Default);
+            }
+
+            try
+            {
+                await waitTask;
                 return;
             }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
             {
+                s_inFlightPreloads.TryRemove(
+                    new KeyValuePair<string, SharedAsyncOperation<object?>>(key, operation));
             }
-            finally
+            catch (ObjectDisposedException)
             {
-                if (preloadTask.IsCompleted)
-                {
-                    s_inFlightPreloads.TryRemove(new KeyValuePair<string, Lazy<Task>>(key, lazy));
-                }
             }
         }
+    }
+
+    private static async Task<object?> PreloadCoreAsSharedAsync(
+        string path,
+        int? maxPixelSize,
+        CancellationToken cancellationToken)
+    {
+        await PreloadCoreAsync(path, maxPixelSize, cancellationToken);
+        return null;
     }
 
     private static async Task PreloadCoreAsync(string path, int? maxPixelSize, CancellationToken cancellationToken)

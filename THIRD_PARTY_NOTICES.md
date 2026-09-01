@@ -13,7 +13,7 @@
 | Microsoft.WindowsAppSDK | WinUI 3 / Windows App SDK 桌面应用框架 | 由 Microsoft 发布，按其 NuGet 包许可证使用。 |
 | Microsoft.Windows.SDK.BuildTools | Windows SDK / WinUI 构建支持 | 由 Microsoft 发布，按其 NuGet 包许可证使用。 |
 | Microsoft.Windows.SDK.BuildTools.WinApp | `dotnet run` / packaged WinUI app 辅助构建支持 | 由 Microsoft 发布，按其 NuGet 包许可证使用。 |
-| Vortice.Direct3D11 / Vortice.DXGI / Vortice.Direct2D1 / Vortice.D3DCompiler | Direct3D / DXGI / Direct2D / shader 编译相关 .NET 绑定 | 按 Vortice 项目的许可证使用。 |
+| Vortice.Direct3D11 / Vortice.DXGI / Vortice.Direct2D1 | Direct3D / DXGI / Direct2D .NET 绑定 | 按 Vortice 项目的许可证使用。 |
 | LibHeifSharp | HEIF / AVIF 容器和 HDR 解码绑定 | 项目文档中按 LGPL-3.0 处理；实际分发时请核对 NuGet 包和其 native 依赖许可证。 |
 | xUnit / Microsoft.NET.Test.Sdk | 单元测试 | 仅用于测试项目，不随应用运行时作为核心功能使用。 |
 

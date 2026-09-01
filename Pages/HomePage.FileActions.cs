@@ -243,6 +243,7 @@ public sealed partial class HomePage
             ? -1
             : remainingPaths.FindIndex(path => string.Equals(path, nextPath, StringComparison.OrdinalIgnoreCase));
 
+        _folderImageIndex.InvalidatePath(document.Path);
         ImagePreloadCache.KeepOnly(remainingPaths.ToHashSet(StringComparer.OrdinalIgnoreCase));
         if (nextPath is not null && File.Exists(nextPath))
         {
@@ -279,13 +280,13 @@ public sealed partial class HomePage
         _currentFolderIndex = -1;
         _currentFilmstripItem = null;
         _currentNavigationIsExplicit = false;
-        _lastFolderListDirectory = null;
-        _lastFolderListRefreshTicks = 0;
         FilmstripItems.ReplaceAll([]);
         ImagePreloadCache.KeepOnly(new HashSet<string>(StringComparer.OrdinalIgnoreCase));
         ViewerSessionState.Clear();
 
-        HideFallbackImageLayer();
+        FallbackImage.Source = null;
+        FallbackImage.Visibility = Visibility.Collapsed;
+        HdrSwapChainHost.Visibility = Visibility.Collapsed;
         await _renderer.ClearAsync(_lifetime.Token);
         ImageSurface.Visibility = Visibility.Collapsed;
         ViewModel.ClearImage(status);

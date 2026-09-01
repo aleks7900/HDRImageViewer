@@ -87,4 +87,79 @@ public sealed class ViewerViewportMathTests
         Assert.True(scale > 4.0);
         Assert.Equal(4096.0 / 1008.0, scale, 6);
     }
+
+    [Fact]
+    public void CalculateVisibleImageLayout_CentersFitImageInsidePreview()
+    {
+        var layout = ViewerViewportMath.CalculateVisibleImageLayout(
+            previewWidth: 1000,
+            previewHeight: 600,
+            imageWidth: 800,
+            imageHeight: 600,
+            contentWidth: 1000,
+            contentHeight: 600,
+            scrollX: 0,
+            scrollY: 0);
+
+        Assert.Equal(0.8f, layout.ScaleX, 5);
+        Assert.Equal(1.0f, layout.ScaleY, 5);
+        Assert.Equal(0.1f, layout.OffsetX, 5);
+        Assert.Equal(0.0f, layout.OffsetY, 5);
+    }
+
+    [Fact]
+    public void CalculateVisibleImageLayout_MapsZoomedPanToNegativeOffsets()
+    {
+        var layout = ViewerViewportMath.CalculateVisibleImageLayout(
+            previewWidth: 1000,
+            previewHeight: 600,
+            imageWidth: 1600,
+            imageHeight: 1200,
+            contentWidth: 1600,
+            contentHeight: 1200,
+            scrollX: 300,
+            scrollY: 200);
+
+        Assert.Equal(1.6f, layout.ScaleX, 5);
+        Assert.Equal(2.0f, layout.ScaleY, 5);
+        Assert.Equal(-0.3f, layout.OffsetX, 5);
+        Assert.Equal(-1.0f / 3.0f, layout.OffsetY, 5);
+    }
+
+    [Fact]
+    public void CalculateVisibleImageLayout_KeepsBottomRightEdgeInsideImage()
+    {
+        var layout = ViewerViewportMath.CalculateVisibleImageLayout(
+            previewWidth: 1000,
+            previewHeight: 600,
+            imageWidth: 1600,
+            imageHeight: 1200,
+            contentWidth: 1600,
+            contentHeight: 1200,
+            scrollX: 600,
+            scrollY: 600);
+
+        var rightUv = (1.0f - layout.OffsetX) / layout.ScaleX;
+        var bottomUv = (1.0f - layout.OffsetY) / layout.ScaleY;
+        Assert.Equal(1.0f, rightUv, 5);
+        Assert.Equal(1.0f, bottomUv, 5);
+    }
+
+    [Fact]
+    public void CalculateSwapChainPixelSize_UsesPreviewAndCompositionScale()
+    {
+        var size = ViewerViewportMath.CalculateSwapChainPixelSize(1280, 720, 1.5, 1.5);
+
+        Assert.Equal(1920, size.PixelWidth);
+        Assert.Equal(1080, size.PixelHeight);
+    }
+
+    [Fact]
+    public void CalculateSwapChainPixelSize_ReturnsZeroForEmptyPreview()
+    {
+        var size = ViewerViewportMath.CalculateSwapChainPixelSize(0, 720, 1.5, 1.5);
+
+        Assert.Equal(0, size.PixelWidth);
+        Assert.Equal(0, size.PixelHeight);
+    }
 }

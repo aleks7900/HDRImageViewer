@@ -142,17 +142,31 @@
                 PointerReleased="PreviewSurface_PointerReleased"
                 PointerWheelChanged="PreviewSurface_PointerWheelChanged"
                 SizeChanged="PreviewSurface_SizeChanged">
+                <SwapChainPanel
+                    x:Name="HdrSwapChainHost"
+                    HorizontalAlignment="Stretch"
+                    VerticalAlignment="Stretch"
+                    AutomationProperties.Name="HDR 渲染表面"
+                    CompositionScaleChanged="HdrSwapChainHost_CompositionScaleChanged"
+                    IsHitTestVisible="False"
+                    SizeChanged="HdrSwapChainHost_SizeChanged"
+                    Visibility="Collapsed" />
                 <ScrollViewer
                         x:Name="ImageScroller"
+                    Background="Transparent"
                     AutomationProperties.Name="图片画布"
                     HorizontalScrollBarVisibility="Hidden"
                     HorizontalScrollMode="Enabled"
-                    VerticalScrollBarVisibility="Hidden"
                     VerticalScrollMode="Enabled"
+                    VerticalScrollBarVisibility="Hidden"
+                    ViewChanged="ImageScroller_ViewChanged"
                     ZoomMode="Disabled">
-                    <Grid x:Name="ImageViewport">
+                    <Grid
+                        x:Name="ImageViewport"
+                        Background="Transparent">
                         <Grid
                             x:Name="ImageSurface"
+                            Background="Transparent"
                             HorizontalAlignment="Center"
                             RenderTransformOrigin="0.5,0.5"
                             VerticalAlignment="Center"
@@ -222,11 +236,6 @@
                             <Grid.RenderTransform>
                                 <ScaleTransform x:Name="ImageInteractionScaleTransform" />
                             </Grid.RenderTransform>
-                            <SwapChainPanel
-                                x:Name="HdrSwapChainHost"
-                                AutomationProperties.Name="HDR 渲染表面"
-                                CompositionScaleChanged="HdrSwapChainHost_CompositionScaleChanged"
-                                SizeChanged="HdrSwapChainHost_SizeChanged" />
                             <Image
                         x:Name="FallbackImage"
                         AutomationProperties.Name="图片预览回退层"
