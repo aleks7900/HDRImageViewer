@@ -12,7 +12,8 @@ public static class DirectoryMetadataCache
     private const int CurrentVersion = 19;
     private const int MaxResidentDirectoryFiles = 8;
     private const string LegacyCacheFileName = ".hdrimageviewer.meta.json";
-    private static readonly TimeSpan FlushDelay = TimeSpan.FromSeconds(1.5);
+    private static readonly TimeSpan FlushDelay = TimeSpan.FromSeconds(4);
+    private static readonly TimeSpan MaximumDirtyAge = TimeSpan.FromSeconds(30);
 
     // Cache files live under LocalAppData instead of the browsed folder: the
     // in-folder file polluted user photo directories and silently never
@@ -32,6 +33,7 @@ public static class DirectoryMetadataCache
     private static readonly ConcurrentDictionary<string, DirectoryState> s_directories = new(StringComparer.OrdinalIgnoreCase);
     private static readonly Timer s_flushTimer = new(_ => _ = FlushDirtyDirectoriesAsync(), null, Timeout.Infinite, Timeout.Infinite);
     private static readonly object s_flushTimerGate = new();
+    private static readonly SemaphoreSlim s_flushGate = new(1, 1);
 
     public static async Task<ImageLoadResult?> TryLoadAsync(string path, CancellationToken cancellationToken = default)
     {
@@ -106,7 +108,7 @@ public static class DirectoryMetadataCache
             state.File ??= new DirectoryMetadataCacheFile();
             state.File.Version = CurrentVersion;
             state.File.Entries[Path.GetFileName(path)] = DirectoryMetadataEntry.Create(result, containerKind);
-            state.IsDirty = true;
+            state.MarkDirty();
         }
         finally
         {
@@ -150,74 +152,132 @@ public static class DirectoryMetadataCache
 
     private static void ScheduleFlush()
     {
+        var now = Environment.TickCount64;
+        var dueTime = FlushDelay;
+        foreach (var state in s_directories.Values)
+        {
+            if (!state.IsDirty || state.FirstDirtyTicks <= 0)
+            {
+                continue;
+            }
+
+            var remainingMilliseconds = Math.Max(
+                0.0,
+                MaximumDirtyAge.TotalMilliseconds - (now - state.FirstDirtyTicks));
+            if (remainingMilliseconds < dueTime.TotalMilliseconds)
+            {
+                dueTime = TimeSpan.FromMilliseconds(remainingMilliseconds);
+            }
+        }
+
         lock (s_flushTimerGate)
         {
-            s_flushTimer.Change(FlushDelay, Timeout.InfiniteTimeSpan);
+            s_flushTimer.Change(dueTime, Timeout.InfiniteTimeSpan);
         }
     }
 
-    private static async Task FlushDirtyDirectoriesAsync(CancellationToken cancellationToken = default)
+    private static async Task FlushDirtyDirectoriesAsync(
+        CancellationToken cancellationToken = default)
     {
-        foreach (var state in s_directories.Values)
+        await s_flushGate.WaitAsync(cancellationToken);
+        try
         {
-            if (!state.IsDirty)
+            foreach (var state in s_directories.Values)
             {
-                continue;
-            }
-
-            await state.Lock.WaitAsync(cancellationToken);
-            DirectoryMetadataCacheFile? snapshot = null;
-            try
-            {
-                if (state.IsDirty && state.File is not null)
+                if (!state.IsDirty)
                 {
-                    snapshot = state.File.Clone();
-                    state.IsDirty = false;
+                    continue;
+                }
+
+                await state.Lock.WaitAsync(cancellationToken);
+                DirectoryMetadataCacheFile? snapshot = null;
+                var snapshotVersion = 0L;
+                try
+                {
+                    if (state.IsDirty && state.File is not null)
+                    {
+                        snapshot = state.File.Clone();
+                        snapshotVersion = state.ChangeVersion;
+                    }
+                }
+                finally
+                {
+                    state.Lock.Release();
+                }
+
+                if (snapshot is null)
+                {
+                    continue;
+                }
+
+                var cachePath = GetCacheFilePath(state.Directory);
+                string? temporaryPath = null;
+                try
+                {
+                    Directory.CreateDirectory(s_cacheRoot);
+                    temporaryPath = cachePath + ".tmp-" + Guid.NewGuid().ToString("N");
+                    await using var writeStream = new FileStream(
+                        temporaryPath,
+                        FileMode.CreateNew,
+                        FileAccess.Write,
+                        FileShare.None,
+                        64 * 1024,
+                        FileOptions.Asynchronous);
+                    await JsonSerializer.SerializeAsync(
+                        writeStream,
+                        snapshot,
+                        JsonOptions,
+                        cancellationToken);
+                    await writeStream.FlushAsync(cancellationToken);
+                    writeStream.Close();
+                    File.Move(temporaryPath, cachePath, overwrite: true);
+                    temporaryPath = null;
+
+                    await state.Lock.WaitAsync(CancellationToken.None);
+                    try
+                    {
+                        state.MarkFlushed(snapshotVersion);
+                    }
+                    finally
+                    {
+                        state.Lock.Release();
+                    }
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch
+                {
+                    await state.Lock.WaitAsync(CancellationToken.None);
+                    try
+                    {
+                        state.MarkFlushFailed();
+                    }
+                    finally
+                    {
+                        state.Lock.Release();
+                    }
+                }
+                finally
+                {
+                    if (temporaryPath is not null)
+                    {
+                        TryDeleteFile(temporaryPath);
+                    }
                 }
             }
-            finally
-            {
-                state.Lock.Release();
-            }
 
-            if (snapshot is null)
+            TrimResidentDirectoryFiles(activeDirectory: null);
+        }
+        finally
+        {
+            s_flushGate.Release();
+            if (s_directories.Values.Any(state => state.IsDirty))
             {
-                continue;
-            }
-
-            var cachePath = GetCacheFilePath(state.Directory);
-            string? temporaryPath = null;
-            try
-            {
-                Directory.CreateDirectory(s_cacheRoot);
-                temporaryPath = cachePath + ".tmp-" + Guid.NewGuid().ToString("N");
-                await using var writeStream = new FileStream(
-                    temporaryPath,
-                    FileMode.CreateNew,
-                    FileAccess.Write,
-                    FileShare.None,
-                    64 * 1024,
-                    FileOptions.Asynchronous | FileOptions.WriteThrough);
-                await JsonSerializer.SerializeAsync(writeStream, snapshot, JsonOptions, cancellationToken);
-                await writeStream.FlushAsync(cancellationToken);
-                writeStream.Close();
-                File.Move(temporaryPath, cachePath, overwrite: true);
-                temporaryPath = null;
-            }
-            catch
-            {
-                state.IsDirty = true;
-            }
-            finally
-            {
-                if (temporaryPath is not null)
-                {
-                    TryDeleteFile(temporaryPath);
-                }
+                ScheduleFlush();
             }
         }
-
-        TrimResidentDirectoryFiles(activeDirectory: null);
     }
 
     private static void TrimResidentDirectoryFiles(string? activeDirectory)
@@ -303,6 +363,9 @@ public static class DirectoryMetadataCache
     private sealed class DirectoryState
     {
         private long _lastAccessTicks = Environment.TickCount64;
+        private long _firstDirtyTicks;
+        private long _changeVersion;
+        private int _isDirty;
 
         public DirectoryState(string directory)
         {
@@ -317,13 +380,44 @@ public static class DirectoryMetadataCache
 
         public bool IsLoaded { get; set; }
 
-        public bool IsDirty { get; set; }
+        public bool IsDirty => Volatile.Read(ref _isDirty) != 0;
+
+        public long FirstDirtyTicks => Interlocked.Read(ref _firstDirtyTicks);
+
+        public long ChangeVersion => Interlocked.Read(ref _changeVersion);
 
         public long LastAccessTicks => Interlocked.Read(ref _lastAccessTicks);
 
         public void Touch()
         {
             Interlocked.Exchange(ref _lastAccessTicks, Environment.TickCount64);
+        }
+
+        public void MarkDirty()
+        {
+            if (Interlocked.Exchange(ref _isDirty, 1) == 0)
+            {
+                Interlocked.Exchange(ref _firstDirtyTicks, Environment.TickCount64);
+            }
+
+            Interlocked.Increment(ref _changeVersion);
+        }
+
+        public void MarkFlushed(long snapshotVersion)
+        {
+            if (ChangeVersion != snapshotVersion)
+            {
+                return;
+            }
+
+            Volatile.Write(ref _isDirty, 0);
+            Interlocked.Exchange(ref _firstDirtyTicks, 0);
+        }
+
+        public void MarkFlushFailed()
+        {
+            Volatile.Write(ref _isDirty, 1);
+            Interlocked.Exchange(ref _firstDirtyTicks, Environment.TickCount64);
         }
     }
 

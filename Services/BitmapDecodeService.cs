@@ -1,4 +1,3 @@
-using System.Buffers.Binary;
 using System.Globalization;
 using System.IO;
 using System.Reflection;
@@ -789,11 +788,12 @@ public static class BitmapDecodeService
             if (useRawPpm)
             {
                 var ppmTimer = Stopwatch.StartNew();
-                var ppmBitmap = ReadPpmAsRgba16(
+                var ppmBitmap = PortableImageReader.ReadPpmAsRgba16(
                     ppmPath,
                     $"libjxl djxl [djxl {djxlMs}ms, downsampling {downsampling}x, PPM16 raw path]; {info.TransferSummary}; {info.ColorSummary}",
                     transfer,
-                    info.UsesBt2020Primaries);
+                    info.UsesBt2020Primaries,
+                    cancellationToken);
                 var ppmMs = ppmTimer.ElapsedMilliseconds;
                 ppmBitmap = ppmBitmap with { DecoderName = $"{ppmBitmap.DecoderName} [read PPM {ppmMs}ms]" };
                 ppmBitmap = DownscalePreviewBitmapIfNeeded(ppmBitmap, maxPixelSize, cancellationToken);
@@ -820,141 +820,6 @@ public static class BitmapDecodeService
             TryDeleteFile(pngPath);
             TryDeleteFile(ppmPath);
             TryDeleteDirectory(tempDir);
-        }
-    }
-
-    private static DecodedBitmap ReadPpmAsRgba16(
-        string path,
-        string decoderName,
-        DecodedBitmapTransfer transfer,
-        bool usesBt2020Primaries)
-    {
-        var data = File.ReadAllBytes(path);
-        var offset = 0;
-        var magic = ReadAsciiToken(data, ref offset);
-        if (!string.Equals(magic, "P6", StringComparison.Ordinal))
-        {
-            throw new InvalidOperationException("libjxl djxl PPM output was not a binary P6 image.");
-        }
-
-        var width = int.Parse(ReadAsciiToken(data, ref offset), CultureInfo.InvariantCulture);
-        var height = int.Parse(ReadAsciiToken(data, ref offset), CultureInfo.InvariantCulture);
-        var maxValue = int.Parse(ReadAsciiToken(data, ref offset), CultureInfo.InvariantCulture);
-        if (width <= 0 || height <= 0 || maxValue <= 0 || maxValue > 65535)
-        {
-            throw new InvalidOperationException($"libjxl djxl PPM output has invalid metadata: {width}x{height}, max {maxValue}.");
-        }
-
-        SkipAsciiWhitespace(data, ref offset);
-        var bytesPerSample = maxValue > 255 ? 2 : 1;
-        var expectedBytes = checked(width * height * 3 * bytesPerSample);
-        if (data.Length - offset < expectedBytes)
-        {
-            throw new InvalidOperationException("libjxl djxl PPM output is truncated.");
-        }
-
-        var pixels = new byte[checked(width * height * 8)];
-        var source = offset;
-        var destination = 0;
-        if (bytesPerSample == 2)
-        {
-            for (var i = 0; i < width * height; i++)
-            {
-                WritePpmUInt16AsLittleEndian(data, source, maxValue, pixels, destination);
-                WritePpmUInt16AsLittleEndian(data, source + 2, maxValue, pixels, destination + 2);
-                WritePpmUInt16AsLittleEndian(data, source + 4, maxValue, pixels, destination + 4);
-                pixels[destination + 6] = 0xFF;
-                pixels[destination + 7] = 0xFF;
-                source += 6;
-                destination += 8;
-            }
-        }
-        else
-        {
-            for (var i = 0; i < width * height; i++)
-            {
-                WritePpmByteAsUInt16(data[source], maxValue, pixels, destination);
-                WritePpmByteAsUInt16(data[source + 1], maxValue, pixels, destination + 2);
-                WritePpmByteAsUInt16(data[source + 2], maxValue, pixels, destination + 4);
-                pixels[destination + 6] = 0xFF;
-                pixels[destination + 7] = 0xFF;
-                source += 3;
-                destination += 8;
-            }
-        }
-
-        return new DecodedBitmap(
-            width,
-            height,
-            pixels,
-            ColorManagedToSrgb: false,
-            decoderName,
-            DecodedBitmapPixelFormat.Rgba16Unorm,
-            transfer,
-            usesBt2020Primaries,
-            usesBt2020Primaries ? GainMapColorGamut.Bt2100 : GainMapColorGamut.Bt709);
-    }
-
-    private static void WritePpmUInt16AsLittleEndian(byte[] source, int sourceOffset, int maxValue, byte[] destination, int destinationOffset)
-    {
-        var value = (source[sourceOffset] << 8) | source[sourceOffset + 1];
-        if (maxValue != 65535)
-        {
-            value = (int)Math.Round(value * (65535.0 / maxValue));
-        }
-
-        destination[destinationOffset] = (byte)(value & 0xFF);
-        destination[destinationOffset + 1] = (byte)(value >> 8);
-    }
-
-    private static void WritePpmByteAsUInt16(byte value, int maxValue, byte[] destination, int destinationOffset)
-    {
-        var scaled = maxValue == 255
-            ? (value << 8) | value
-            : (int)Math.Round(value * (65535.0 / maxValue));
-        destination[destinationOffset] = (byte)(scaled & 0xFF);
-        destination[destinationOffset + 1] = (byte)(scaled >> 8);
-    }
-
-    private static string ReadAsciiToken(byte[] data, ref int offset)
-    {
-        SkipAsciiWhitespaceAndComments(data, ref offset);
-        var start = offset;
-        while (offset < data.Length && !char.IsWhiteSpace((char)data[offset]))
-        {
-            offset++;
-        }
-
-        if (start == offset)
-        {
-            throw new InvalidOperationException("PPM header is incomplete.");
-        }
-
-        return System.Text.Encoding.ASCII.GetString(data, start, offset - start);
-    }
-
-    private static void SkipAsciiWhitespaceAndComments(byte[] data, ref int offset)
-    {
-        while (offset < data.Length)
-        {
-            SkipAsciiWhitespace(data, ref offset);
-            if (offset >= data.Length || data[offset] != (byte)'#')
-            {
-                return;
-            }
-
-            while (offset < data.Length && data[offset] != (byte)'\n')
-            {
-                offset++;
-            }
-        }
-    }
-
-    private static void SkipAsciiWhitespace(byte[] data, ref int offset)
-    {
-        while (offset < data.Length && char.IsWhiteSpace((char)data[offset]))
-        {
-            offset++;
         }
     }
 
@@ -1059,7 +924,10 @@ public static class BitmapDecodeService
         try
         {
             var backend = await ConvertExrToPfmAsync(path, pfmPath, cancellationToken);
-            var bitmap = ReadPfmAsLinearScRgb(pfmPath, backend);
+            var bitmap = PortableImageReader.ReadPfmAsLinearScRgb(
+                pfmPath,
+                backend,
+                cancellationToken);
             bitmap = DownscalePreviewBitmapIfNeeded(bitmap, maxPixelSize, cancellationToken);
             return nativeFallbackReason is null
                 ? bitmap
@@ -1110,106 +978,6 @@ public static class BitmapDecodeService
 
         throw new InvalidOperationException(
             "未找到 EXR 解码工具。请安装 OpenImageIO 的 oiiotool.exe 或 ImageMagick 的 magick.exe，并将其加入 PATH，或放到 external/openimageio/bin / external/imagemagick/bin。");
-    }
-
-    private static DecodedBitmap ReadPfmAsLinearScRgb(string path, string backendName)
-    {
-        var data = File.ReadAllBytes(path);
-        var offset = 0;
-        var magic = ReadPfmToken(data, ref offset);
-        var channels = magic switch
-        {
-            "PF" => 3,
-            "Pf" => 1,
-            _ => throw new InvalidOperationException("EXR 中间 PFM 输出无效：缺少 PF/Pf 文件头。"),
-        };
-
-        var width = int.Parse(ReadPfmToken(data, ref offset), CultureInfo.InvariantCulture);
-        var height = int.Parse(ReadPfmToken(data, ref offset), CultureInfo.InvariantCulture);
-        var scale = float.Parse(ReadPfmToken(data, ref offset), CultureInfo.InvariantCulture);
-        if (width <= 0 || height <= 0)
-        {
-            throw new InvalidOperationException($"EXR 中间 PFM 输出尺寸无效：{width}x{height}。");
-        }
-
-        var littleEndian = scale < 0;
-        var expectedBytes = checked(width * height * channels * sizeof(float));
-        if (data.Length - offset < expectedBytes)
-        {
-            throw new InvalidOperationException("EXR 中间 PFM 输出不完整。");
-        }
-
-        var pixels = new byte[checked(width * height * 8)];
-        for (var y = 0; y < height; y++)
-        {
-            var sourceY = height - 1 - y;
-            for (var x = 0; x < width; x++)
-            {
-                var sourceIndex = checked(offset + (((sourceY * width) + x) * channels * sizeof(float)));
-                var destinationIndex = checked(((y * width) + x) * 8);
-                var r = ReadPfmFloat(data, sourceIndex, littleEndian);
-                var g = channels == 1 ? r : ReadPfmFloat(data, sourceIndex + sizeof(float), littleEndian);
-                var b = channels == 1 ? r : ReadPfmFloat(data, sourceIndex + (2 * sizeof(float)), littleEndian);
-                WriteHalfLittleEndian(pixels, destinationIndex, r);
-                WriteHalfLittleEndian(pixels, destinationIndex + 2, g);
-                WriteHalfLittleEndian(pixels, destinationIndex + 4, b);
-                WriteHalfLittleEndian(pixels, destinationIndex + 6, 1.0f);
-            }
-        }
-
-        return new DecodedBitmap(
-            width,
-            height,
-            pixels,
-            ColorManagedToSrgb: false,
-            $"OpenEXR scene-linear via {backendName}",
-            DecodedBitmapPixelFormat.Rgba16Float,
-            DecodedBitmapTransfer.LinearScRgb,
-            UsesBt2020Primaries: false);
-    }
-
-    private static string ReadPfmToken(byte[] data, ref int offset)
-    {
-        while (offset < data.Length)
-        {
-            var value = data[offset];
-            if (value == '#')
-            {
-                while (offset < data.Length && data[offset] is not (byte)'\n')
-                {
-                    offset++;
-                }
-                continue;
-            }
-
-            if (!char.IsWhiteSpace((char)value))
-            {
-                break;
-            }
-
-            offset++;
-        }
-
-        var start = offset;
-        while (offset < data.Length && !char.IsWhiteSpace((char)data[offset]))
-        {
-            offset++;
-        }
-
-        if (start == offset)
-        {
-            throw new InvalidOperationException("EXR 中间 PFM 输出无效：文件头不完整。");
-        }
-
-        return System.Text.Encoding.ASCII.GetString(data, start, offset - start);
-    }
-
-    private static float ReadPfmFloat(byte[] data, int offset, bool littleEndian)
-    {
-        var bits = littleEndian
-            ? BinaryPrimitives.ReadInt32LittleEndian(data.AsSpan(offset, sizeof(float)))
-            : BinaryPrimitives.ReadInt32BigEndian(data.AsSpan(offset, sizeof(float)));
-        return BitConverter.Int32BitsToSingle(bits);
     }
 
     private static DecodedBitmap DecodeWicHalfLinearScRgb(

@@ -34,6 +34,8 @@
              Link="DecoderCatalog.cs" />
     <Compile Include="..\..\Services\FileSignatureProbe.cs"
              Link="FileSignatureProbe.cs" />
+    <Compile Include="..\..\Services\FolderImageIndexCache.cs"
+             Link="FolderImageIndexCache.cs" />
     <Compile Include="..\..\Services\GainMapJpegProbe.cs"
              Link="GainMapJpegProbe.cs" />
     <Compile Include="..\..\Services\HeifAvifProbe.cs"
@@ -52,8 +54,16 @@
              Link="DecodedBitmap.cs" />
     <Compile Include="..\..\Services\DecodedCachePolicy.cs"
              Link="DecodedCachePolicy.cs" />
+    <Compile Include="..\..\Services\ImageMemoryPressureService.cs"
+             Link="ImageMemoryPressureService.cs" />
+    <Compile Include="..\..\Services\PortableImageReader.cs"
+             Link="PortableImageReader.cs" />
+    <Compile Include="..\..\Services\SharedAsyncOperation.cs"
+             Link="SharedAsyncOperation.cs" />
     <Compile Include="..\..\Services\JxlNativeDecoder.cs"
              Link="JxlNativeDecoder.cs" />
+    <Compile Include="..\..\Services\NativeExrDecoder.cs"
+             Link="NativeExrDecoder.cs" />
     <Compile Include="..\..\Services\JxlProbe.cs"
              Link="JxlProbe.cs" />
     <Compile Include="..\..\Services\NativeToolLocator.cs"

@@ -8,47 +8,92 @@ public static class ImagePreloadCache
 
     private static readonly ConcurrentDictionary<string, CacheEntry> s_cache = new(StringComparer.OrdinalIgnoreCase);
     private static readonly ConcurrentDictionary<string, long> s_lastAccessTicks = new(StringComparer.OrdinalIgnoreCase);
-    private static readonly ConcurrentDictionary<string, Lazy<Task<ImageLoadResult>>> s_inFlightLoads = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly ConcurrentDictionary<string, SharedAsyncOperation<ImageLoadResult>> s_inFlightLoads = new(StringComparer.OrdinalIgnoreCase);
     private static readonly ConcurrentDictionary<string, Lazy<Task>> s_inFlightPreloads = new(StringComparer.OrdinalIgnoreCase);
 
-    public static async Task<ImageLoadResult> GetLoadResultAsync(string path, CancellationToken cancellationToken = default)
+    public static async Task<ImageLoadResult> GetLoadResultAsync(
+        string path,
+        CancellationToken cancellationToken = default)
     {
-        var lastWriteTimeUtc = File.GetLastWriteTimeUtc(path);
-        if (s_cache.TryGetValue(path, out var cached)
-            && cached.LastWriteTimeUtc == lastWriteTimeUtc
-            && cached.LoadResult is not null)
+        while (true)
         {
-            TouchLastAccess(path);
-            return cached.LoadResult;
-        }
-
-        // Deduplicate concurrent loads of the same path (UI navigation racing
-        // the adjacent-image preloader). The shared probe runs detached from
-        // any single caller's token; each caller only stops waiting via its
-        // own token, so one canceled waiter cannot fail the others.
-        var lazy = s_inFlightLoads.GetOrAdd(path, p => new Lazy<Task<ImageLoadResult>>(() => LoadAndStoreAsync(p)));
-        var loadTask = lazy.Value;
-        _ = loadTask.ContinueWith(
-            _ => s_inFlightLoads.TryRemove(new KeyValuePair<string, Lazy<Task<ImageLoadResult>>>(path, lazy)),
-            CancellationToken.None,
-            TaskContinuationOptions.ExecuteSynchronously,
-            TaskScheduler.Default);
-        try
-        {
-            return await loadTask.WaitAsync(cancellationToken);
-        }
-        finally
-        {
-            if (loadTask.IsCompleted)
+            cancellationToken.ThrowIfCancellationRequested();
+            var lastWriteTimeUtc = File.GetLastWriteTimeUtc(path);
+            if (s_cache.TryGetValue(path, out var cached)
+                && cached.LastWriteTimeUtc == lastWriteTimeUtc
+                && cached.LoadResult is not null)
             {
-                s_inFlightLoads.TryRemove(new KeyValuePair<string, Lazy<Task<ImageLoadResult>>>(path, lazy));
+                TouchLastAccess(path);
+                return cached.LoadResult;
+            }
+
+            var candidate = new SharedAsyncOperation<ImageLoadResult>(
+                token => LoadAndStoreAsync(path, token));
+            var operation = s_inFlightLoads.GetOrAdd(path, candidate);
+            var ownsOperation = ReferenceEquals(candidate, operation);
+            if (!ownsOperation)
+            {
+                candidate.Dispose();
+            }
+
+            if (operation.IsAbandoned)
+            {
+                s_inFlightLoads.TryRemove(
+                    new KeyValuePair<string, SharedAsyncOperation<ImageLoadResult>>(
+                        path,
+                        operation));
+                continue;
+            }
+
+            Task<ImageLoadResult> waitTask;
+            try
+            {
+                waitTask = operation.WaitAsync(cancellationToken);
+            }
+            catch (ObjectDisposedException)
+            {
+                continue;
+            }
+
+            if (ownsOperation)
+            {
+                var completion = operation.Completion;
+                _ = completion.ContinueWith(
+                    _ =>
+                    {
+                        s_inFlightLoads.TryRemove(
+                            new KeyValuePair<string, SharedAsyncOperation<ImageLoadResult>>(
+                                path,
+                                operation));
+                        operation.Dispose();
+                    },
+                    CancellationToken.None,
+                    TaskContinuationOptions.ExecuteSynchronously,
+                    TaskScheduler.Default);
+            }
+
+            try
+            {
+                return await waitTask;
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                s_inFlightLoads.TryRemove(
+                    new KeyValuePair<string, SharedAsyncOperation<ImageLoadResult>>(
+                        path,
+                        operation));
+            }
+            catch (ObjectDisposedException)
+            {
             }
         }
     }
 
-    private static async Task<ImageLoadResult> LoadAndStoreAsync(string path)
+    private static async Task<ImageLoadResult> LoadAndStoreAsync(
+        string path,
+        CancellationToken cancellationToken)
     {
-        var result = await ImageDocumentLoader.LoadAsync(path, CancellationToken.None);
+        var result = await ImageDocumentLoader.LoadAsync(path, cancellationToken);
         var entry = s_cache.AddOrUpdate(
             path,
             _ => new CacheEntry(result.LastWriteTimeUtc) { LoadResult = result },
@@ -160,25 +205,31 @@ public static class ImagePreloadCache
         TouchLastAccess(path);
     }
 
-    public static void KeepOnly(
+    public static long KeepOnly(
         IReadOnlySet<string> pathsToKeep,
         IReadOnlySet<string>? decodedPriorityPaths = null)
     {
+        var evictedBytes = 0L;
         foreach (var path in s_cache.Keys)
         {
-            if (!pathsToKeep.Contains(path))
+            if (!pathsToKeep.Contains(path)
+                && s_cache.TryRemove(path, out var removed))
             {
-                s_cache.TryRemove(path, out _);
+                evictedBytes += removed.DecodedByteCount;
                 s_lastAccessTicks.TryRemove(path, out _);
             }
         }
 
         if (decodedPriorityPaths is not null)
         {
-            DropDecodedPayloadsOutsidePriority(decodedPriorityPaths);
+            evictedBytes += DropDecodedPayloadsOutsidePriority(
+                decodedPriorityPaths);
         }
 
-        TrimDecodedPayloadsToBudget(decodedPriorityPaths ?? pathsToKeep);
+        evictedBytes += TrimDecodedPayloadsToBudget(
+            decodedPriorityPaths ?? pathsToKeep);
+        ImageMemoryPressureService.ReportEvictedBytes(evictedBytes);
+        return evictedBytes;
     }
 
     private static void TouchLastAccess(string path)
@@ -262,12 +313,13 @@ public static class ImagePreloadCache
                     : candidate);
     }
 
-    private static void TrimDecodedPayloadsToBudget(IReadOnlySet<string> priorityPaths)
+    private static long TrimDecodedPayloadsToBudget(
+        IReadOnlySet<string> priorityPaths)
     {
         var totalBytes = s_cache.Values.Sum(entry => entry.DecodedByteCount);
         if (totalBytes <= MaxDecodedPixelCacheBytes)
         {
-            return;
+            return 0L;
         }
 
         // Evict non-priority entries first, least-recently-used within each
@@ -277,12 +329,13 @@ public static class ImagePreloadCache
             .OrderBy(pair => priorityPaths.Contains(pair.Key) ? 1 : 0)
             .ThenBy(pair => s_lastAccessTicks.TryGetValue(pair.Key, out var ticks) ? ticks : 0L)
             .ToList();
+        var evictedBytes = 0L;
 
         foreach (var (path, entry) in candidates)
         {
             if (totalBytes <= MaxDecodedPixelCacheBytes)
             {
-                return;
+                break;
             }
 
             if (!s_cache.TryUpdate(path, entry.WithoutDecodedPayloads(), entry))
@@ -291,11 +344,16 @@ public static class ImagePreloadCache
             }
 
             totalBytes -= entry.DecodedByteCount;
+            evictedBytes += entry.DecodedByteCount;
         }
+
+        return evictedBytes;
     }
 
-    private static void DropDecodedPayloadsOutsidePriority(IReadOnlySet<string> priorityPaths)
+    private static long DropDecodedPayloadsOutsidePriority(
+        IReadOnlySet<string> priorityPaths)
     {
+        var evictedBytes = 0L;
         foreach (var (path, entry) in s_cache)
         {
             if (entry.DecodedByteCount == 0 || priorityPaths.Contains(path))
@@ -303,7 +361,12 @@ public static class ImagePreloadCache
                 continue;
             }
 
-            s_cache.TryUpdate(path, entry.WithoutDecodedPayloads(), entry);
+            if (s_cache.TryUpdate(path, entry.WithoutDecodedPayloads(), entry))
+            {
+                evictedBytes += entry.DecodedByteCount;
+            }
         }
+
+        return evictedBytes;
     }
 }
