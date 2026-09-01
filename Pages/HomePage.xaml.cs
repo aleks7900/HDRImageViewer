@@ -58,6 +58,7 @@ public sealed partial class HomePage : Page
     private const double CompactViewerChromeBreakpoint = 860.0;
     private const double FilmstripItemWidth = 68.0;
     private const double ToolbarReservedWidth = 640.0;
+    private const double PanMoveThreshold = 3.0;
 
     private readonly D3D11HdrRenderPipeline _renderer = new();
     private readonly CancellationTokenSource _lifetime = new();
@@ -82,6 +83,7 @@ public sealed partial class HomePage : Page
     private bool _isCropModeEnabled;
     private bool _isDraggingCropFrame;
     private bool _isPanning;
+    private bool _panHasMoved;
     private bool _isZoomCommitInProgress;
     private bool _suppressSwapChainSizeChangedForZoom;
     private bool _hasRestoredViewerSession;
@@ -1401,10 +1403,11 @@ public sealed partial class HomePage : Page
         }
 
         _isPanning = true;
+        _panHasMoved = false;
         _panPointerId = e.Pointer.PointerId;
         _panStartPointerPosition = point.Position;
-        _panStartScrollOffsetX = ImageScroller.HorizontalOffset;
-        _panStartScrollOffsetY = ImageScroller.VerticalOffset;
+        _panStartScrollOffsetX = _layoutScrollX ?? ImageScroller.HorizontalOffset;
+        _panStartScrollOffsetY = _layoutScrollY ?? ImageScroller.VerticalOffset;
         PreviewSurface.CapturePointer(e.Pointer);
         e.Handled = true;
     }
@@ -1421,6 +1424,14 @@ public sealed partial class HomePage : Page
         var point = e.GetCurrentPoint(PreviewSurface);
         var deltaX = _panStartPointerPosition.X - point.Position.X;
         var deltaY = _panStartPointerPosition.Y - point.Position.Y;
+        if (!_panHasMoved
+            && (Math.Abs(deltaX) < PanMoveThreshold && Math.Abs(deltaY) < PanMoveThreshold))
+        {
+            e.Handled = true;
+            return;
+        }
+
+        _panHasMoved = true;
         var maxScrollX = Math.Max(0.0, ImageViewport.Width - PreviewSurface.ActualWidth);
         var maxScrollY = Math.Max(0.0, ImageViewport.Height - PreviewSurface.ActualHeight);
         var newOffsetX = Math.Clamp(_panStartScrollOffsetX + deltaX, 0.0, maxScrollX);
@@ -1448,9 +1459,15 @@ public sealed partial class HomePage : Page
             return;
         }
 
+        var hadMoved = _panHasMoved;
         _isPanning = false;
+        _panHasMoved = false;
         PreviewSurface.ReleasePointerCapture(e.Pointer);
-        _ = PresentViewportAsync(_lifetime.Token);
+        if (hadMoved)
+        {
+            _ = PresentViewportAsync(_lifetime.Token);
+        }
+
         e.Handled = true;
     }
 

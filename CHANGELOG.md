@@ -7,6 +7,7 @@
 - When the image is smaller than the window, the HDR surface is centered at image size so the canvas keeps the page background instead of turning black.
 - Zoom no longer scales the SwapChainPanel with a XAML transform; covering zooms update ImageLayout from the intended scroll offset so the frame does not clip to black or flash on commit.
 - Dragging a zoomed image now redraws ImageLayout on each pointer move so the HDR frame follows the cursor instead of waiting for a coalesced scroll event.
+- A click after zooming no longer treats a stale zero scroll offset as a pan, which previously jumped the crop and looked like a sudden extra zoom.
 - Cached DXGI/EDID display capability per monitor so zoom and slider updates do not re-enumerate adapters.
 - Wired `FolderImageIndexCache` into folder navigation and removed the leftover per-image forced Gen-2 GC.
 - Shared adjacent-image preloads now cancel through `SharedAsyncOperation` instead of the first caller's token.

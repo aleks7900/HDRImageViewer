@@ -43,6 +43,12 @@ public sealed partial class HomePage
     {
         if (!_isZoomPreviewActive && !_isPanning && !e.IsIntermediate)
         {
+            if (HasPendingLayoutScrollMismatch())
+            {
+                ReapplyLayoutScrollOverride();
+                return;
+            }
+
             ClearLayoutScrollOverride();
         }
 
@@ -307,14 +313,7 @@ public sealed partial class HomePage
         _ = anchorViewportY;
         ClearSwapChainZoomPreviewTransform();
         ApplySwapChainHostPlacement(targetImageWidth, targetImageHeight);
-        if (!ViewerViewportMath.ImageFitsInPreview(
-            targetImageWidth,
-            targetImageHeight,
-            PreviewSurface.ActualWidth,
-            PreviewSurface.ActualHeight))
-        {
-            _ = PresentViewportAsync(_lifetime.Token);
-        }
+        _ = PresentViewportAsync(_lifetime.Token);
     }
 
     private void SetLayoutScrollOverride(double scrollX, double scrollY)
@@ -327,6 +326,27 @@ public sealed partial class HomePage
     {
         _layoutScrollX = null;
         _layoutScrollY = null;
+    }
+
+    private bool HasPendingLayoutScrollMismatch()
+    {
+        if (_layoutScrollX is not double scrollX || _layoutScrollY is not double scrollY || ImageScroller is null)
+        {
+            return false;
+        }
+
+        return Math.Abs(ImageScroller.HorizontalOffset - scrollX) > 1.0
+            || Math.Abs(ImageScroller.VerticalOffset - scrollY) > 1.0;
+    }
+
+    private void ReapplyLayoutScrollOverride()
+    {
+        if (_layoutScrollX is not double scrollX || _layoutScrollY is not double scrollY || ImageScroller is null)
+        {
+            return;
+        }
+
+        ImageScroller.ChangeView(scrollX, scrollY, null, disableAnimation: true);
     }
 
     private void ClearSwapChainZoomPreviewTransform()
