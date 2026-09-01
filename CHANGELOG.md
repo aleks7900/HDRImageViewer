@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Sized the HDR swap chain to the visible preview viewport instead of the zoomed logical image, and pan/zoom now update shader `ImageLayout` without `ResizeBuffers`.
+- Restored follow-the-finger zoom: wheel, pinch, and zoom buttons scale the current HDR frame around the pointer, then re-render the sharp crop after the gesture settles.
 - Cached DXGI/EDID display capability per monitor so zoom and slider updates do not re-enumerate adapters.
 - Wired `FolderImageIndexCache` into folder navigation and removed the leftover per-image forced Gen-2 GC.
 - Shared adjacent-image preloads now cancel through `SharedAsyncOperation` instead of the first caller's token.

@@ -284,6 +284,9 @@ public sealed partial class HomePage
         ImagePreloadCache.KeepOnly(new HashSet<string>(StringComparer.OrdinalIgnoreCase));
         ViewerSessionState.Clear();
 
+        EndSwapChainZoomPreview();
+        _presentedImageWidth = 0.0;
+        _presentedImageHeight = 0.0;
         FallbackImage.Source = null;
         FallbackImage.Visibility = Visibility.Collapsed;
         HdrSwapChainHost.Visibility = Visibility.Collapsed;

@@ -12,8 +12,11 @@ Live Photo chrome.
 
 - Wheel and touchpad input update `_zoomScale` and the logical `ImageSurface`
   size used by `ScrollViewer`.
-- Shader `ImageLayout` maps the viewport onto the logical image; pan/zoom
-  call `RedrawAsync` without `ResizeBuffers`.
+- During the zoom animation, `SwapChainZoomPreviewTransform` scales the
+  current HDR frame around the pointer. GPU `ImageLayout` is committed after
+  the gesture settles so the preview stays at 16 ms even when redraw is busy.
+- Shader `ImageLayout` maps the viewport onto the logical image; pan and the
+  settled zoom call `RedrawAsync` without `ResizeBuffers`.
 - `ResizeBuffers` runs only when the physical preview size or DPI changes.
 - Do not assign `HdrSwapChainHost.Width`/`Height` from the zoomed image size.
   `SwapChainPanel` has no natural size; a 0×0 host presents a blank frame.

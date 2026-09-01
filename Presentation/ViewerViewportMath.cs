@@ -103,6 +103,32 @@ internal static class ViewerViewportMath
     /// Maps the visible preview panel onto the logical image rectangle using the
     /// shader ImageLayout convention: fittedUv = (panelUv - offset) / scale.
     /// </summary>
+    public static double CalculateZoomPreviewScale(double presentedImageWidth, double targetImageWidth)
+    {
+        if (presentedImageWidth <= 0.0 || targetImageWidth <= 0.0)
+        {
+            return 1.0;
+        }
+
+        return Math.Clamp(targetImageWidth / presentedImageWidth, 0.2, 8.0);
+    }
+
+    public static (double X, double Y) CalculateZoomPreviewOrigin(
+        double anchorViewportX,
+        double anchorViewportY,
+        double previewWidth,
+        double previewHeight)
+    {
+        if (previewWidth <= 0.0 || previewHeight <= 0.0)
+        {
+            return (0.5, 0.5);
+        }
+
+        return (
+            Math.Clamp(anchorViewportX / previewWidth, 0.0, 1.0),
+            Math.Clamp(anchorViewportY / previewHeight, 0.0, 1.0));
+    }
+
     public static ViewerVisibleImageLayout CalculateVisibleImageLayout(
         double previewWidth,
         double previewHeight,

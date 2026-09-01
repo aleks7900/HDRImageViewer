@@ -149,8 +149,13 @@
                     AutomationProperties.Name="HDR 渲染表面"
                     CompositionScaleChanged="HdrSwapChainHost_CompositionScaleChanged"
                     IsHitTestVisible="False"
+                    RenderTransformOrigin="0.5,0.5"
                     SizeChanged="HdrSwapChainHost_SizeChanged"
-                    Visibility="Collapsed" />
+                    Visibility="Collapsed">
+                    <SwapChainPanel.RenderTransform>
+                        <ScaleTransform x:Name="SwapChainZoomPreviewTransform" />
+                    </SwapChainPanel.RenderTransform>
+                </SwapChainPanel>
                 <ScrollViewer
                         x:Name="ImageScroller"
                     Background="Transparent"

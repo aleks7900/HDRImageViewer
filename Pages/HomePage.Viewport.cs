@@ -13,6 +13,9 @@ public sealed partial class HomePage
     private Microsoft.UI.Dispatching.DispatcherQueueTimer? _viewportPresentTimer;
     private bool _viewportPresentInFlight;
     private bool _viewportPresentDirty;
+    private bool _isZoomPreviewActive;
+    private double _presentedImageWidth;
+    private double _presentedImageHeight;
 
     private void EnsureViewportPresentTimer()
     {
@@ -34,7 +37,9 @@ public sealed partial class HomePage
 
     private void ImageScroller_ViewChanged(object sender, ScrollViewerViewChangedEventArgs e)
     {
-        if (!ViewModel.HasImage || HdrSwapChainHost.Visibility != Visibility.Visible)
+        if (_isZoomPreviewActive
+            || !ViewModel.HasImage
+            || HdrSwapChainHost.Visibility != Visibility.Visible)
         {
             return;
         }
@@ -44,6 +49,11 @@ public sealed partial class HomePage
 
     private void ScheduleViewportPresent()
     {
+        if (_isZoomPreviewActive)
+        {
+            return;
+        }
+
         _viewportPresentDirty = true;
         if (_viewportPresentInFlight)
         {
@@ -78,6 +88,7 @@ public sealed partial class HomePage
 
                 effectiveCancellationToken.ThrowIfCancellationRequested();
                 await _renderer.RedrawAsync(viewport, effectiveCancellationToken);
+                RememberPresentedImageSize();
             }
             while (_viewportPresentDirty && !effectiveCancellationToken.IsCancellationRequested);
         }
@@ -155,8 +166,69 @@ public sealed partial class HomePage
 
     private void ShowHdrSwapChainHost()
     {
+        EndSwapChainZoomPreview();
         HdrSwapChainHost.Visibility = Visibility.Visible;
         PreviewSurface.UpdateLayout();
         HdrSwapChainHost.UpdateLayout();
+    }
+
+    private void RememberPresentedImageSize()
+    {
+        if (ImageSurface.Width > 0.0 && ImageSurface.Height > 0.0)
+        {
+            _presentedImageWidth = ImageSurface.Width;
+            _presentedImageHeight = ImageSurface.Height;
+        }
+    }
+
+    private void BeginSwapChainZoomPreview()
+    {
+        _isZoomPreviewActive = true;
+        _zoomRenderCts?.Cancel();
+    }
+
+    private void ApplySwapChainZoomPreview(
+        double targetImageWidth,
+        double targetImageHeight,
+        double anchorViewportX,
+        double anchorViewportY)
+    {
+        if (SwapChainZoomPreviewTransform is null
+            || HdrSwapChainHost.Visibility != Visibility.Visible
+            || _presentedImageWidth <= 0.0
+            || _presentedImageHeight <= 0.0)
+        {
+            return;
+        }
+
+        var scaleX = ViewerViewportMath.CalculateZoomPreviewScale(_presentedImageWidth, targetImageWidth);
+        var scaleY = ViewerViewportMath.CalculateZoomPreviewScale(_presentedImageHeight, targetImageHeight);
+        var scale = (scaleX + scaleY) * 0.5;
+        var origin = ViewerViewportMath.CalculateZoomPreviewOrigin(
+            anchorViewportX,
+            anchorViewportY,
+            PreviewSurface.ActualWidth,
+            PreviewSurface.ActualHeight);
+        HdrSwapChainHost.RenderTransformOrigin = new Windows.Foundation.Point(origin.X, origin.Y);
+        SwapChainZoomPreviewTransform.ScaleX = scale;
+        SwapChainZoomPreviewTransform.ScaleY = scale;
+    }
+
+    private void ClearSwapChainZoomPreviewTransform()
+    {
+        if (SwapChainZoomPreviewTransform is null)
+        {
+            return;
+        }
+
+        SwapChainZoomPreviewTransform.ScaleX = 1.0;
+        SwapChainZoomPreviewTransform.ScaleY = 1.0;
+        HdrSwapChainHost.RenderTransformOrigin = new Windows.Foundation.Point(0.5, 0.5);
+    }
+
+    private void EndSwapChainZoomPreview()
+    {
+        _isZoomPreviewActive = false;
+        ClearSwapChainZoomPreviewTransform();
     }
 }

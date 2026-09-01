@@ -783,6 +783,8 @@ public sealed partial class HomePage : Page
         CancelAndDispose(ref _folderRefreshCts);
         StopCompanionMediaPlayback(resetSource: true);
         ImageSurface.Visibility = Visibility.Visible;
+        _presentedImageWidth = 0.0;
+        _presentedImageHeight = 0.0;
         HideFallbackImageLayer();
 
         var renderStatus = string.Empty;
@@ -848,6 +850,7 @@ public sealed partial class HomePage : Page
                 var loadTimer = Stopwatch.StartNew();
                 await _renderer.LoadAsync(document, cancellationToken);
                 cancellationToken.ThrowIfCancellationRequested();
+                RememberPresentedImageSize();
                 loadTimer.Stop();
                 renderStatus = $"{_renderer.LastRenderStatus}; renderer load {loadTimer.ElapsedMilliseconds}ms";
                 var postLayoutTimer = Stopwatch.StartNew();
@@ -1129,7 +1132,7 @@ public sealed partial class HomePage : Page
 
     private async void HdrSwapChainHost_SizeChanged(object sender, SizeChangedEventArgs e)
     {
-        if (_isZoomCommitInProgress || _suppressSwapChainSizeChangedForZoom)
+        if (_isZoomCommitInProgress || _suppressSwapChainSizeChangedForZoom || _isZoomPreviewActive)
         {
             return;
         }
@@ -1145,6 +1148,11 @@ public sealed partial class HomePage : Page
         UpdateFilmstripChromeLayout();
         UpdateImageSurfaceLayout();
         CenterScrollableImage();
+        if (_isZoomPreviewActive)
+        {
+            return;
+        }
+
         RefreshRendererDisplayConfiguration();
         await PresentViewportAsync();
         ViewModel.UpdateRenderStatus(_renderer.LastRenderStatus);
@@ -1152,6 +1160,11 @@ public sealed partial class HomePage : Page
 
     private async void HdrSwapChainHost_CompositionScaleChanged(SwapChainPanel sender, object args)
     {
+        if (_isZoomPreviewActive)
+        {
+            return;
+        }
+
         RefreshRendererDisplayConfiguration();
         await PresentViewportAsync();
         ViewModel.UpdateRenderStatus(_renderer.LastRenderStatus);
@@ -1471,7 +1484,8 @@ public sealed partial class HomePage : Page
 
         _isFitZoom = false;
         _isFillZoom = false;
-        await ZoomByFactorAsync(1.0 / 1.25);
+        SetPendingZoomAnchorToViewportCenter();
+        await ZoomByFactorAsync(1.0 / 1.25, deferRender: true);
     }
 
     private async void ZoomIn_Click(object sender, RoutedEventArgs e)
@@ -1483,7 +1497,8 @@ public sealed partial class HomePage : Page
 
         _isFitZoom = false;
         _isFillZoom = false;
-        await ZoomByFactorAsync(1.25);
+        SetPendingZoomAnchorToViewportCenter();
+        await ZoomByFactorAsync(1.25, deferRender: true);
     }
 
     private async void ActualSize_Click(object sender, RoutedEventArgs e)
@@ -1619,6 +1634,7 @@ public sealed partial class HomePage : Page
                 out var anchorViewportX,
                 out var anchorViewportY)
             || TryCaptureViewportAnchor(out anchorX, out anchorY, out anchorViewportX, out anchorViewportY);
+        EndSwapChainZoomPreview();
         ResetInteractionScaleTransform();
         UpdateImageSurfaceLayout();
         if (!_isFitZoom && !_isFillZoom && hasAnchor)
@@ -1689,6 +1705,7 @@ public sealed partial class HomePage : Page
         _zoomAnimationAnchorY = anchorY;
         _zoomAnimationViewportX = anchorViewportX;
         _zoomAnimationViewportY = anchorViewportY;
+        BeginSwapChainZoomPreview();
         RunZoomAnimationStep();
         _zoomAnimationTimer?.Start();
     }
@@ -1769,7 +1786,11 @@ public sealed partial class HomePage : Page
             CenterScrollableImage();
         }
 
-        ScheduleViewportPresent();
+        ApplySwapChainZoomPreview(
+            targetWidth,
+            targetHeight,
+            anchorViewportX,
+            anchorViewportY);
         UpdateZoomControls();
     }
 
@@ -1794,10 +1815,12 @@ public sealed partial class HomePage : Page
             _isZoomCommitInProgress = true;
             try
             {
+                ClearSwapChainZoomPreviewTransform();
                 await PresentViewportAsync(cancellationToken);
             }
             finally
             {
+                _isZoomPreviewActive = false;
                 _isZoomCommitInProgress = false;
                 _suppressSwapChainSizeChangedForZoom = false;
             }
@@ -1823,6 +1846,7 @@ public sealed partial class HomePage : Page
         _targetZoomScale = 1.0;
         _committedZoomScale = 1.0;
         ClearPendingZoomAnchor();
+        EndSwapChainZoomPreview();
         ResetInteractionScaleTransform();
         UpdateZoomControls();
     }

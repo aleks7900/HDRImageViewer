@@ -155,6 +155,22 @@ public sealed class ViewerViewportMathTests
     }
 
     [Fact]
+    public void CalculateZoomPreviewScale_UsesPresentedImageWidth()
+    {
+        Assert.Equal(1.25, ViewerViewportMath.CalculateZoomPreviewScale(800, 1000), 6);
+        Assert.Equal(1.0, ViewerViewportMath.CalculateZoomPreviewScale(0, 1000), 6);
+    }
+
+    [Fact]
+    public void CalculateZoomPreviewOrigin_MapsPointerIntoHost()
+    {
+        var origin = ViewerViewportMath.CalculateZoomPreviewOrigin(250, 120, 1000, 600);
+
+        Assert.Equal(0.25, origin.X, 6);
+        Assert.Equal(0.2, origin.Y, 6);
+    }
+
+    [Fact]
     public void CalculateSwapChainPixelSize_ReturnsZeroForEmptyPreview()
     {
         var size = ViewerViewportMath.CalculateSwapChainPixelSize(0, 720, 1.5, 1.5);
