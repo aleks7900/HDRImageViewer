@@ -87,4 +87,168 @@ public sealed class ViewerViewportMathTests
         Assert.True(scale > 4.0);
         Assert.Equal(4096.0 / 1008.0, scale, 6);
     }
+
+    [Fact]
+    public void CalculateVisibleImageLayout_CentersFitImageInsidePreview()
+    {
+        var layout = ViewerViewportMath.CalculateVisibleImageLayout(
+            previewWidth: 1000,
+            previewHeight: 600,
+            imageWidth: 800,
+            imageHeight: 600,
+            contentWidth: 1000,
+            contentHeight: 600,
+            scrollX: 0,
+            scrollY: 0);
+
+        Assert.Equal(0.8f, layout.ScaleX, 5);
+        Assert.Equal(1.0f, layout.ScaleY, 5);
+        Assert.Equal(0.1f, layout.OffsetX, 5);
+        Assert.Equal(0.0f, layout.OffsetY, 5);
+    }
+
+    [Fact]
+    public void CalculateVisibleImageLayout_MapsZoomedPanToNegativeOffsets()
+    {
+        var layout = ViewerViewportMath.CalculateVisibleImageLayout(
+            previewWidth: 1000,
+            previewHeight: 600,
+            imageWidth: 1600,
+            imageHeight: 1200,
+            contentWidth: 1600,
+            contentHeight: 1200,
+            scrollX: 300,
+            scrollY: 200);
+
+        Assert.Equal(1.6f, layout.ScaleX, 5);
+        Assert.Equal(2.0f, layout.ScaleY, 5);
+        Assert.Equal(-0.3f, layout.OffsetX, 5);
+        Assert.Equal(-1.0f / 3.0f, layout.OffsetY, 5);
+    }
+
+    [Fact]
+    public void CalculateVisibleImageLayout_KeepsBottomRightEdgeInsideImage()
+    {
+        var layout = ViewerViewportMath.CalculateVisibleImageLayout(
+            previewWidth: 1000,
+            previewHeight: 600,
+            imageWidth: 1600,
+            imageHeight: 1200,
+            contentWidth: 1600,
+            contentHeight: 1200,
+            scrollX: 600,
+            scrollY: 600);
+
+        var rightUv = (1.0f - layout.OffsetX) / layout.ScaleX;
+        var bottomUv = (1.0f - layout.OffsetY) / layout.ScaleY;
+        Assert.Equal(1.0f, rightUv, 5);
+        Assert.Equal(1.0f, bottomUv, 5);
+    }
+
+    [Fact]
+    public void CalculateSwapChainPixelSize_UsesPreviewAndCompositionScale()
+    {
+        var size = ViewerViewportMath.CalculateSwapChainPixelSize(1280, 720, 1.5, 1.5);
+
+        Assert.Equal(1920, size.PixelWidth);
+        Assert.Equal(1080, size.PixelHeight);
+    }
+
+    [Fact]
+    public void CalculateSwapChainHostLayout_KeepsHostAtImageSizeWhenLetterboxed()
+    {
+        var layout = ViewerViewportMath.CalculateSwapChainHostLayout(
+            previewWidth: 1000,
+            previewHeight: 600,
+            imageWidth: 800,
+            imageHeight: 600,
+            contentWidth: 1000,
+            contentHeight: 600,
+            scrollX: 0,
+            scrollY: 0);
+
+        Assert.Equal(800, layout.HostWidth, 6);
+        Assert.Equal(600, layout.HostHeight, 6);
+        Assert.Equal(1.0f, layout.ScaleX, 5);
+        Assert.Equal(1.0f, layout.ScaleY, 5);
+        Assert.Equal(0.0f, layout.OffsetX, 5);
+        Assert.Equal(0.0f, layout.OffsetY, 5);
+        Assert.False(layout.CoversPreview(1000, 600));
+    }
+
+    [Fact]
+    public void CalculateSwapChainHostLayout_DoesNotLetterboxNarrowTallImage()
+    {
+        var layout = ViewerViewportMath.CalculateSwapChainHostLayout(
+            previewWidth: 1000,
+            previewHeight: 500,
+            imageWidth: 800,
+            imageHeight: 700,
+            contentWidth: 1000,
+            contentHeight: 700,
+            scrollX: 0,
+            scrollY: 0);
+
+        Assert.Equal(800, layout.HostWidth, 6);
+        Assert.Equal(500, layout.HostHeight, 6);
+        Assert.Equal(1.0f, layout.ScaleX, 5);
+        Assert.Equal(1.4f, layout.ScaleY, 5);
+        Assert.Equal(0.0f, layout.OffsetX, 5);
+        Assert.Equal(0.0f, layout.OffsetY, 5);
+        Assert.False(layout.CoversPreview(1000, 500));
+    }
+
+    [Fact]
+    public void CalculateSwapChainHostLayout_CoversPreviewWhenImageIsLarger()
+    {
+        var layout = ViewerViewportMath.CalculateSwapChainHostLayout(
+            previewWidth: 1000,
+            previewHeight: 600,
+            imageWidth: 1600,
+            imageHeight: 1200,
+            contentWidth: 1600,
+            contentHeight: 1200,
+            scrollX: 300,
+            scrollY: 200);
+
+        Assert.Equal(1000, layout.HostWidth, 6);
+        Assert.Equal(600, layout.HostHeight, 6);
+        Assert.Equal(1.6f, layout.ScaleX, 5);
+        Assert.Equal(2.0f, layout.ScaleY, 5);
+        Assert.Equal(-0.3f, layout.OffsetX, 5);
+        Assert.Equal(-1.0f / 3.0f, layout.OffsetY, 5);
+        Assert.True(layout.CoversPreview(1000, 600));
+    }
+
+    [Fact]
+    public void ImageFitsInPreview_DetectsLetterboxedAndCoveringStates()
+    {
+        Assert.True(ViewerViewportMath.ImageFitsInPreview(800, 600, 1000, 600));
+        Assert.False(ViewerViewportMath.ImageFitsInPreview(1600, 1200, 1000, 600));
+    }
+
+    [Fact]
+    public void CalculateZoomPreviewScale_UsesPresentedImageWidth()
+    {
+        Assert.Equal(1.25, ViewerViewportMath.CalculateZoomPreviewScale(800, 1000), 6);
+        Assert.Equal(1.0, ViewerViewportMath.CalculateZoomPreviewScale(0, 1000), 6);
+    }
+
+    [Fact]
+    public void CalculateZoomPreviewOrigin_MapsPointerIntoHost()
+    {
+        var origin = ViewerViewportMath.CalculateZoomPreviewOrigin(250, 120, 1000, 600);
+
+        Assert.Equal(0.25, origin.X, 6);
+        Assert.Equal(0.2, origin.Y, 6);
+    }
+
+    [Fact]
+    public void CalculateSwapChainPixelSize_ReturnsZeroForEmptyPreview()
+    {
+        var size = ViewerViewportMath.CalculateSwapChainPixelSize(0, 720, 1.5, 1.5);
+
+        Assert.Equal(0, size.PixelWidth);
+        Assert.Equal(0, size.PixelHeight);
+    }
 }

@@ -9,8 +9,6 @@ namespace HdrImageViewer.Pages;
 // HomePage.xaml.cs for readability; shared fields stay in the main partial.
 public sealed partial class HomePage
 {
-    private const long FolderListReuseWindowMilliseconds = 2500;
-
     private async void PreviousImage_Click(object sender, RoutedEventArgs e)
     {
         await NavigateFolderImageAsync(-1);
@@ -65,23 +63,6 @@ public sealed partial class HomePage
     private void QueueFolderImageListRefresh(string currentPath)
     {
         CancelAndDispose(ref _folderRefreshCts);
-
-        // While stepping through a folder, don't re-enumerate and re-sort the
-        // whole directory on every image: with tens of thousands of siblings
-        // that wastes CPU/disk on each navigation. Reuse the current list for a
-        // short window as long as it still contains the image being shown.
-        var directory = Path.GetDirectoryName(currentPath);
-        if (directory is not null
-            && string.Equals(directory, _lastFolderListDirectory, StringComparison.OrdinalIgnoreCase)
-            && Environment.TickCount64 - _lastFolderListRefreshTicks < FolderListReuseWindowMilliseconds
-            && _currentFolderIndex >= 0
-            && _currentFolderIndex < _folderImagePaths.Count
-            && string.Equals(_folderImagePaths[_currentFolderIndex], currentPath, StringComparison.OrdinalIgnoreCase))
-        {
-            QueueAdjacentPreloads();
-            return;
-        }
-
         _folderRefreshCts = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token);
         var token = _folderRefreshCts.Token;
         _ = RefreshFolderImageListAsync(currentPath, token);
@@ -102,8 +83,6 @@ public sealed partial class HomePage
 
             _folderImagePaths = result.Paths;
             _currentFolderIndex = result.CurrentIndex;
-            _lastFolderListDirectory = Path.GetDirectoryName(currentPath);
-            _lastFolderListRefreshTicks = Environment.TickCount64;
             RefreshFilmstripItems();
             UpdateFolderNavigationOverlay();
             ViewerSessionState.SaveImage(currentPath, _folderImagePaths, _currentNavigationIsExplicit);
@@ -114,34 +93,15 @@ public sealed partial class HomePage
         }
     }
 
-    private static (List<string> Paths, int CurrentIndex) BuildFolderImageList(string currentPath, CancellationToken cancellationToken)
+    private (List<string> Paths, int CurrentIndex) BuildFolderImageList(string currentPath, CancellationToken cancellationToken)
     {
         try
         {
-            var directory = Path.GetDirectoryName(currentPath);
-            if (string.IsNullOrWhiteSpace(directory) || !Directory.Exists(directory))
-            {
-                return ([currentPath], 0);
-            }
-
-            var paths = Directory
-                .EnumerateFiles(directory)
-                .Where(IsSupportedImagePath)
-                .OrderBy(Path.GetFileName, StringComparer.CurrentCultureIgnoreCase)
-                .ToList();
-            cancellationToken.ThrowIfCancellationRequested();
-
-            var currentIndex = paths.FindIndex(file => string.Equals(file, currentPath, StringComparison.OrdinalIgnoreCase));
-            if (currentIndex < 0)
-            {
-                paths.Add(currentPath);
-                paths = paths
-                    .OrderBy(Path.GetFileName, StringComparer.CurrentCultureIgnoreCase)
-                    .ToList();
-                currentIndex = paths.FindIndex(file => string.Equals(file, currentPath, StringComparison.OrdinalIgnoreCase));
-            }
-
-            return (paths, Math.Max(currentIndex, 0));
+            return _folderImageIndex.GetFolderImages(currentPath, cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch
         {

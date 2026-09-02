@@ -4,19 +4,22 @@ This note records the current zoom state and an older experimental branch that
 lived outside the current project folder. It is intentionally kept separate from
 the implementation because the experimental zoom code is not ready to merge.
 
-## Current Viewer - 2026-06-05
+## Current Viewer
 
-`Pages/HomePage.xaml.cs` still uses the safer current implementation:
+`HdrSwapChainHost` is a `PreviewSurface` sibling that stretches to the visible
+viewport. `ImageSurface` remains the scroll extent for pan, fallback, crop, and
+Live Photo chrome.
 
-- Wheel and touchpad input update `_zoomScale`.
-- `PreviewDeferredZoom()` applies a temporary `ScaleTransform` to
-  `ImageSurface`.
-- `ApplyZoomAsync()` commits the real surface size after a short debounce.
-- `ResizeRendererAsync()` then resizes the D3D11 FP16 swap-chain surface.
-
-This keeps the app buildable and avoids the experimental DXGI matrix path, but
-it can still flash during aggressive wheel zoom because `SwapChainPanel` does
-not compose perfectly under changing XAML transforms.
+- Wheel and touchpad input update `_zoomScale` and the logical `ImageSurface`
+  size used by `ScrollViewer`.
+- During the zoom animation, `SwapChainZoomPreviewTransform` scales the
+  current HDR frame around the pointer. GPU `ImageLayout` is committed after
+  the gesture settles so the preview stays at 16 ms even when redraw is busy.
+- Shader `ImageLayout` maps the viewport onto the logical image; pan and the
+  settled zoom call `RedrawAsync` without `ResizeBuffers`.
+- `ResizeBuffers` runs only when the physical preview size or DPI changes.
+- Do not assign `HdrSwapChainHost.Width`/`Height` from the zoomed image size.
+  `SwapChainPanel` has no natural size; a 0×0 host presents a blank frame.
 
 ## Experimental Branch Summary
 

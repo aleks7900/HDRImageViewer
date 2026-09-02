@@ -16,7 +16,6 @@ using Microsoft.UI.Xaml.Media.Animation;
 using SharpGen.Runtime;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
-using System.Runtime;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
@@ -59,19 +58,16 @@ public sealed partial class HomePage : Page
     private const double CompactViewerChromeBreakpoint = 860.0;
     private const double FilmstripItemWidth = 68.0;
     private const double ToolbarReservedWidth = 640.0;
-
-    private static readonly TimeSpan MemoryTrimDebounceDelay = TimeSpan.FromSeconds(2.5);
-    private static readonly Timer s_memoryTrimTimer = new(_ => TrimImageLoadMemory(), null, Timeout.Infinite, Timeout.Infinite);
+    private const double PanMoveThreshold = 3.0;
 
     private readonly D3D11HdrRenderPipeline _renderer = new();
     private readonly CancellationTokenSource _lifetime = new();
+    private readonly FolderImageIndexCache _folderImageIndex = new();
     private DisplayInformation? _displayInformation;
     private HdrImageDocument? _currentDocument;
     private List<string> _folderImagePaths = [];
     private int _currentFolderIndex = -1;
     private FilmstripImageItem? _currentFilmstripItem;
-    private string? _lastFolderListDirectory;
-    private long _lastFolderListRefreshTicks;
     private bool _isFolderNavigationLoading;
     private double _zoomScale = 1.0;
     private double _targetZoomScale = 1.0;
@@ -87,6 +83,7 @@ public sealed partial class HomePage : Page
     private bool _isCropModeEnabled;
     private bool _isDraggingCropFrame;
     private bool _isPanning;
+    private bool _panHasMoved;
     private bool _isZoomCommitInProgress;
     private bool _suppressSwapChainSizeChangedForZoom;
     private bool _hasRestoredViewerSession;
@@ -125,6 +122,13 @@ public sealed partial class HomePage : Page
     private double? _xamlFallbackDisplayAspectRatio;
     private MediaPlayer? _livePhotoMediaPlayer;
     private bool _isCompanionMediaPlaybackActive;
+    private IntPtr _cachedMonitorHandle;
+    private double? _cachedDxgiPeakNits;
+    private double? _cachedDxgiFullFrameNits;
+    private string _cachedDxgiDetails = "DXGI output unavailable";
+    private string? _cachedDxgiDeviceName;
+    private EdidHdrMetadata? _cachedEdidMetadata;
+    private bool _displayOutputCacheValid;
 
     public ImageWorkspaceViewModel ViewModel { get; } = new();
 
@@ -243,7 +247,7 @@ public sealed partial class HomePage : Page
             ApplyViewerSettings();
 
             _renderer.Attach(HdrSwapChainHost);
-            await ResizeRendererAsync();
+            await PresentViewportAsync();
             _lifetime.Token.ThrowIfCancellationRequested();
             if (!_hasRestoredViewerSession && !ViewModel.HasImage)
             {
@@ -268,6 +272,7 @@ public sealed partial class HomePage : Page
         StopCompanionMediaPlayback(resetSource: true);
         DetachSettingsChanged();
         _zoomAnimationTimer?.Stop();
+        _viewportPresentTimer?.Stop();
 
         if (_displayInformation is not null && _isDisplayInformationEventAttached)
         {
@@ -278,6 +283,7 @@ public sealed partial class HomePage : Page
         _imagePreloads.Dispose();
         _imageLoads.Dispose();
         CancelAndDispose(ref _folderRefreshCts);
+        _folderImageIndex.Dispose();
         _filmstripThumbnails.Dispose();
         CancelAndDispose(ref _zoomRenderCts);
         _actualSizeCts?.Cancel();
@@ -551,7 +557,7 @@ public sealed partial class HomePage : Page
         UpdateImageSurfaceLayout();
         CenterScrollableImage();
         RefreshRendererDisplayConfiguration();
-        await ResizeRendererAsync();
+        await PresentViewportAsync();
         ViewModel.UpdateRenderStatus(_renderer.LastRenderStatus);
     }
 
@@ -740,7 +746,7 @@ public sealed partial class HomePage : Page
         _xamlFallbackDisplayAspectRatio = null;
         FallbackImage.Source = null;
         FallbackImage.Visibility = Visibility.Collapsed;
-        HdrSwapChainHost.Visibility = Visibility.Visible;
+        ShowHdrSwapChainHost();
         _renderer.RestoreSwapChainPanelBinding();
     }
 
@@ -779,6 +785,9 @@ public sealed partial class HomePage : Page
         CancelAndDispose(ref _folderRefreshCts);
         StopCompanionMediaPlayback(resetSource: true);
         ImageSurface.Visibility = Visibility.Visible;
+        _presentedImageWidth = 0.0;
+        _presentedImageHeight = 0.0;
+        ClearLayoutScrollOverride();
         HideFallbackImageLayer();
 
         var renderStatus = string.Empty;
@@ -786,7 +795,7 @@ public sealed partial class HomePage : Page
         {
             ViewModel.BeginFileLoad();
             var openTimer = Stopwatch.StartNew();
-            RefreshRendererDisplayConfiguration();
+            RefreshRendererDisplayConfiguration(forceOutputQuery: false);
             var probeTimer = Stopwatch.StartNew();
             var loadResult = await ImageWorkspaceViewModel.LoadFileAsync(path, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
@@ -823,7 +832,7 @@ public sealed partial class HomePage : Page
             UpdateImageSurfaceLayout();
             if (!useXamlColorManagedImage)
             {
-                await ResizeRendererAsync(GetRenderSurfaceWidth(), GetRenderSurfaceHeight(), cancellationToken);
+                await PresentViewportAsync(cancellationToken);
             }
             resizeTimer.Stop();
 
@@ -844,12 +853,13 @@ public sealed partial class HomePage : Page
                 var loadTimer = Stopwatch.StartNew();
                 await _renderer.LoadAsync(document, cancellationToken);
                 cancellationToken.ThrowIfCancellationRequested();
+                RememberPresentedImageSize();
                 loadTimer.Stop();
                 renderStatus = $"{_renderer.LastRenderStatus}; renderer load {loadTimer.ElapsedMilliseconds}ms";
                 var postLayoutTimer = Stopwatch.StartNew();
                 if (UpdateImageSurfaceLayout())
                 {
-                    await ResizeRendererAsync(GetRenderSurfaceWidth(), GetRenderSurfaceHeight(), cancellationToken);
+                    await PresentViewportAsync(cancellationToken);
                     cancellationToken.ThrowIfCancellationRequested();
                 }
                 postLayoutTimer.Stop();
@@ -902,8 +912,6 @@ public sealed partial class HomePage : Page
             {
                 QueueFolderImageListRefresh(path);
             }
-            RequestImageLoadMemoryTrim();
-
             if (!string.IsNullOrWhiteSpace(renderStatus)
                 && _imageLoads.IsCurrent(imageLoad))
             {
@@ -1127,13 +1135,16 @@ public sealed partial class HomePage : Page
 
     private async void HdrSwapChainHost_SizeChanged(object sender, SizeChangedEventArgs e)
     {
-        if (_isZoomCommitInProgress || _suppressSwapChainSizeChangedForZoom)
+        if (_isZoomCommitInProgress
+            || _suppressSwapChainSizeChangedForZoom
+            || _isZoomPreviewActive
+            || _isUpdatingSwapChainHostLayout)
         {
             return;
         }
 
         RefreshRendererDisplayConfiguration();
-        await ResizeRendererAsync();
+        await PresentViewportAsync();
         ViewModel.UpdateRenderStatus(_renderer.LastRenderStatus);
     }
 
@@ -1143,22 +1154,32 @@ public sealed partial class HomePage : Page
         UpdateFilmstripChromeLayout();
         UpdateImageSurfaceLayout();
         CenterScrollableImage();
+        if (_isZoomPreviewActive || _isUpdatingSwapChainHostLayout)
+        {
+            return;
+        }
+
         RefreshRendererDisplayConfiguration();
-        await ResizeRendererAsync();
+        await PresentViewportAsync();
         ViewModel.UpdateRenderStatus(_renderer.LastRenderStatus);
     }
 
     private async void HdrSwapChainHost_CompositionScaleChanged(SwapChainPanel sender, object args)
     {
+        if (_isZoomPreviewActive || _isUpdatingSwapChainHostLayout)
+        {
+            return;
+        }
+
         RefreshRendererDisplayConfiguration();
-        await ResizeRendererAsync();
+        await PresentViewportAsync();
         ViewModel.UpdateRenderStatus(_renderer.LastRenderStatus);
     }
 
     private async void DisplayInformation_AdvancedColorInfoChanged(DisplayInformation sender, object args)
     {
-        RefreshRendererDisplayConfiguration();
-        await ResizeRendererAsync();
+        RefreshRendererDisplayConfiguration(forceOutputQuery: true);
+        await PresentViewportAsync();
         ViewModel.UpdateRenderStatus(_renderer.LastRenderStatus);
     }
 
@@ -1382,10 +1403,11 @@ public sealed partial class HomePage : Page
         }
 
         _isPanning = true;
+        _panHasMoved = false;
         _panPointerId = e.Pointer.PointerId;
         _panStartPointerPosition = point.Position;
-        _panStartScrollOffsetX = ImageScroller.HorizontalOffset;
-        _panStartScrollOffsetY = ImageScroller.VerticalOffset;
+        _panStartScrollOffsetX = _layoutScrollX ?? ImageScroller.HorizontalOffset;
+        _panStartScrollOffsetY = _layoutScrollY ?? ImageScroller.VerticalOffset;
         PreviewSurface.CapturePointer(e.Pointer);
         e.Handled = true;
     }
@@ -1402,9 +1424,21 @@ public sealed partial class HomePage : Page
         var point = e.GetCurrentPoint(PreviewSurface);
         var deltaX = _panStartPointerPosition.X - point.Position.X;
         var deltaY = _panStartPointerPosition.Y - point.Position.Y;
-        var newOffsetX = Math.Clamp(_panStartScrollOffsetX + deltaX, 0.0, ImageScroller.ScrollableWidth);
-        var newOffsetY = Math.Clamp(_panStartScrollOffsetY + deltaY, 0.0, ImageScroller.ScrollableHeight);
+        if (!_panHasMoved
+            && (Math.Abs(deltaX) < PanMoveThreshold && Math.Abs(deltaY) < PanMoveThreshold))
+        {
+            e.Handled = true;
+            return;
+        }
+
+        _panHasMoved = true;
+        var maxScrollX = Math.Max(0.0, ImageViewport.Width - PreviewSurface.ActualWidth);
+        var maxScrollY = Math.Max(0.0, ImageViewport.Height - PreviewSurface.ActualHeight);
+        var newOffsetX = Math.Clamp(_panStartScrollOffsetX + deltaX, 0.0, maxScrollX);
+        var newOffsetY = Math.Clamp(_panStartScrollOffsetY + deltaY, 0.0, maxScrollY);
+        SetLayoutScrollOverride(newOffsetX, newOffsetY);
         ImageScroller.ChangeView(newOffsetX, newOffsetY, null, disableAnimation: true);
+        _ = PresentViewportAsync(_lifetime.Token);
         e.Handled = true;
     }
 
@@ -1425,8 +1459,15 @@ public sealed partial class HomePage : Page
             return;
         }
 
+        var hadMoved = _panHasMoved;
         _isPanning = false;
+        _panHasMoved = false;
         PreviewSurface.ReleasePointerCapture(e.Pointer);
+        if (hadMoved)
+        {
+            _ = PresentViewportAsync(_lifetime.Token);
+        }
+
         e.Handled = true;
     }
 
@@ -1469,7 +1510,8 @@ public sealed partial class HomePage : Page
 
         _isFitZoom = false;
         _isFillZoom = false;
-        await ZoomByFactorAsync(1.0 / 1.25);
+        SetPendingZoomAnchorToViewportCenter();
+        await ZoomByFactorAsync(1.0 / 1.25, deferRender: true);
     }
 
     private async void ZoomIn_Click(object sender, RoutedEventArgs e)
@@ -1481,7 +1523,8 @@ public sealed partial class HomePage : Page
 
         _isFitZoom = false;
         _isFillZoom = false;
-        await ZoomByFactorAsync(1.25);
+        SetPendingZoomAnchorToViewportCenter();
+        await ZoomByFactorAsync(1.25, deferRender: true);
     }
 
     private async void ActualSize_Click(object sender, RoutedEventArgs e)
@@ -1617,6 +1660,7 @@ public sealed partial class HomePage : Page
                 out var anchorViewportX,
                 out var anchorViewportY)
             || TryCaptureViewportAnchor(out anchorX, out anchorY, out anchorViewportX, out anchorViewportY);
+        EndSwapChainZoomPreview();
         ResetInteractionScaleTransform();
         UpdateImageSurfaceLayout();
         if (!_isFitZoom && !_isFillZoom && hasAnchor)
@@ -1624,8 +1668,7 @@ public sealed partial class HomePage : Page
             RestoreViewportAnchor(anchorX, anchorY, anchorViewportX, anchorViewportY);
         }
 
-        RefreshRendererDisplayConfiguration();
-        await ResizeRendererAsync(GetRenderSurfaceWidth(), GetRenderSurfaceHeight(), effectiveCancellationToken);
+        await PresentViewportAsync(effectiveCancellationToken);
         effectiveCancellationToken.ThrowIfCancellationRequested();
 
         _committedZoomScale = _zoomScale;
@@ -1688,6 +1731,7 @@ public sealed partial class HomePage : Page
         _zoomAnimationAnchorY = anchorY;
         _zoomAnimationViewportX = anchorViewportX;
         _zoomAnimationViewportY = anchorViewportY;
+        BeginSwapChainZoomPreview();
         RunZoomAnimationStep();
         _zoomAnimationTimer?.Start();
     }
@@ -1753,6 +1797,7 @@ public sealed partial class HomePage : Page
         try
         {
             ApplyImageSurfaceSize(targetWidth, targetHeight);
+            ImageScroller?.UpdateLayout();
         }
         finally
         {
@@ -1768,6 +1813,11 @@ public sealed partial class HomePage : Page
             CenterScrollableImage();
         }
 
+        ApplySwapChainZoomPreview(
+            targetWidth,
+            targetHeight,
+            anchorViewportX,
+            anchorViewportY);
         UpdateZoomControls();
     }
 
@@ -1789,14 +1839,14 @@ public sealed partial class HomePage : Page
                 return;
             }
 
-            RefreshRendererDisplayConfiguration();
             _isZoomCommitInProgress = true;
             try
             {
-                await ResizeRendererAsync(targetWidth, targetHeight, cancellationToken);
+                await PresentViewportAsync(cancellationToken);
             }
             finally
             {
+                EndSwapChainZoomPreview();
                 _isZoomCommitInProgress = false;
                 _suppressSwapChainSizeChangedForZoom = false;
             }
@@ -1822,6 +1872,7 @@ public sealed partial class HomePage : Page
         _targetZoomScale = 1.0;
         _committedZoomScale = 1.0;
         ClearPendingZoomAnchor();
+        EndSwapChainZoomPreview();
         ResetInteractionScaleTransform();
         UpdateZoomControls();
     }
@@ -1890,22 +1941,23 @@ public sealed partial class HomePage : Page
         }
 
         UpdateSdrWhiteControls();
-
-        if (IsLoaded)
-        {
-            RefreshRendererDisplayConfiguration();
-        }
-
         UpdateHdrGainValueText();
-        _renderer.ViewMode = viewMode;
-        _renderer.HeadroomMode = headroomMode;
-        _renderer.DisplayCapacityOverrideLog2 = usesSlider && HdrGainSlider is not null ? CalculateManualDisplayCapacityStops() : null;
-        _renderer.AdaptiveToneMappingEnabled = false;
-        _renderer.ColorGamutMappingMode = _settings.ColorGamutMappingMode;
+
+        var displayConfiguration = IsLoaded
+            ? CreateDisplayConfiguration()
+            : _renderer.DisplayConfiguration;
+        _renderer.ApplySettings(new HdrRendererSettings(
+            viewMode,
+            headroomMode,
+            usesSlider && HdrGainSlider is not null ? CalculateManualDisplayCapacityStops() : null,
+            AdaptiveToneMappingEnabled: false,
+            CalculateReferenceWhiteExposureScale(),
+            _settings.ColorGamutMappingMode,
+            displayConfiguration));
 
         if (IsLoaded)
         {
-            await ResizeRendererAsync(GetRenderSurfaceWidth(), GetRenderSurfaceHeight(), effectiveCancellationToken);
+            await PresentViewportAsync(effectiveCancellationToken);
             effectiveCancellationToken.ThrowIfCancellationRequested();
             ViewModel.UpdateRenderStatus(_renderer.LastRenderStatus);
         }
@@ -1983,7 +2035,10 @@ public sealed partial class HomePage : Page
 
     private void ApplyViewerSettings()
     {
-        _renderer.ColorGamutMappingMode = _settings.ColorGamutMappingMode;
+        _renderer.ApplySettings(_renderer.Settings with
+        {
+            ColorGamutMappingMode = _settings.ColorGamutMappingMode,
+        });
 
         ApplyInspectorLayout();
 
@@ -2055,10 +2110,18 @@ public sealed partial class HomePage : Page
         }
     }
 
-    private void RefreshRendererDisplayConfiguration()
+    private void RefreshRendererDisplayConfiguration(bool forceOutputQuery = false)
     {
-        _renderer.DisplayConfiguration = CreateDisplayConfiguration();
-        _renderer.ReferenceWhiteExposureScale = CalculateReferenceWhiteExposureScale();
+        if (forceOutputQuery)
+        {
+            InvalidateDisplayOutputCache();
+        }
+
+        _renderer.ApplySettings(_renderer.Settings with
+        {
+            DisplayConfiguration = CreateDisplayConfiguration(),
+            ReferenceWhiteExposureScale = CalculateReferenceWhiteExposureScale(),
+        });
     }
 
     // The reference-white override slider is a diffuse-white / exposure control.
@@ -2171,6 +2234,17 @@ public sealed partial class HomePage : Page
             || ViewModel.TransferFunction.Contains("scRGB", StringComparison.OrdinalIgnoreCase);
     }
 
+    private void InvalidateDisplayOutputCache()
+    {
+        _displayOutputCacheValid = false;
+        _cachedMonitorHandle = IntPtr.Zero;
+        _cachedDxgiPeakNits = null;
+        _cachedDxgiFullFrameNits = null;
+        _cachedDxgiDetails = "DXGI output unavailable";
+        _cachedDxgiDeviceName = null;
+        _cachedEdidMetadata = null;
+    }
+
     private HdrDisplayConfiguration CreateDisplayConfiguration()
     {
         if (_displayInformation is null)
@@ -2196,25 +2270,54 @@ public sealed partial class HomePage : Page
             var fullFrameLuminance = advancedColorFullFrame;
             var details = "Windows App SDK DisplayInformation";
             string? dxgiDisplayDeviceName = null;
+            EdidHdrMetadata? edidMetadata = null;
 
             if (App.MainWindow is not null)
             {
                 var hwnd = WindowNative.GetWindowHandle(App.MainWindow);
-                var dxgiPeak = TryGetDxgiMaxLuminanceForWindow(
-                    hwnd,
-                    out var dxgiFullFrame,
-                    out var dxgiDetails,
-                    out dxgiDisplayDeviceName);
-                if (dxgiPeak is > 0.0)
+                var monitor = MonitorFromWindow(hwnd, MonitorDefaultToNearest);
+                if (_displayOutputCacheValid
+                    && monitor != IntPtr.Zero
+                    && monitor == _cachedMonitorHandle)
                 {
-                    peakLuminance = dxgiPeak.Value;
-                    fullFrameLuminance = dxgiFullFrame ?? fullFrameLuminance;
-                    details = $"DXGI output luminance; {dxgiDetails}; AdvancedColor peak/full-frame {advancedColorPeak:0}/{advancedColorFullFrame:0} nits";
+                    dxgiDisplayDeviceName = _cachedDxgiDeviceName;
+                    edidMetadata = _cachedEdidMetadata;
+                    if (_cachedDxgiPeakNits is > 0.0)
+                    {
+                        peakLuminance = _cachedDxgiPeakNits.Value;
+                        fullFrameLuminance = _cachedDxgiFullFrameNits ?? fullFrameLuminance;
+                        details = $"DXGI output luminance; {_cachedDxgiDetails}; AdvancedColor peak/full-frame {advancedColorPeak:0}/{advancedColorFullFrame:0} nits";
+                    }
+                }
+                else
+                {
+                    var dxgiPeak = TryGetDxgiMaxLuminanceForWindow(
+                        hwnd,
+                        out var dxgiFullFrame,
+                        out var dxgiDetails,
+                        out dxgiDisplayDeviceName);
+                    if (kind == DisplayAdvancedColorKind.HighDynamicRange)
+                    {
+                        _ = EdidHdrMetadataReader.TryReadForDisplay(dxgiDisplayDeviceName, out edidMetadata);
+                    }
+
+                    _cachedMonitorHandle = monitor;
+                    _cachedDxgiPeakNits = dxgiPeak;
+                    _cachedDxgiFullFrameNits = dxgiFullFrame;
+                    _cachedDxgiDetails = dxgiDetails;
+                    _cachedDxgiDeviceName = dxgiDisplayDeviceName;
+                    _cachedEdidMetadata = edidMetadata;
+                    _displayOutputCacheValid = monitor != IntPtr.Zero;
+                    if (dxgiPeak is > 0.0)
+                    {
+                        peakLuminance = dxgiPeak.Value;
+                        fullFrameLuminance = dxgiFullFrame ?? fullFrameLuminance;
+                        details = $"DXGI output luminance; {dxgiDetails}; AdvancedColor peak/full-frame {advancedColorPeak:0}/{advancedColorFullFrame:0} nits";
+                    }
                 }
             }
 
-            if (kind == DisplayAdvancedColorKind.HighDynamicRange
-                && EdidHdrMetadataReader.TryReadForDisplay(dxgiDisplayDeviceName, out var edidMetadata))
+            if (kind == DisplayAdvancedColorKind.HighDynamicRange && edidMetadata is not null)
             {
                 var edidSummary = edidMetadata.MaxFrameAverageLuminanceInNits is > 0.0
                     ? $"EDID HDR peak/full-frame {edidMetadata.MaxLuminanceInNits:0}/{edidMetadata.MaxFrameAverageLuminanceInNits.Value:0} nits from {edidMetadata.Source}"
@@ -2252,6 +2355,7 @@ public sealed partial class HomePage : Page
         }
         catch (Exception ex)
         {
+            InvalidateDisplayOutputCache();
             return HdrDisplayConfiguration.Unknown with
             {
                 Details = $"Display HDR state unavailable: {ex.GetType().Name}"
@@ -2304,37 +2408,6 @@ public sealed partial class HomePage : Page
         return GetSelectedHdrViewMode() is not GainmapViewMode.Sdr and not GainmapViewMode.GainMap;
     }
 
-
-    private Task ResizeRendererAsync()
-    {
-        var surfaceWidth = GetRenderSurfaceWidth();
-        var surfaceHeight = GetRenderSurfaceHeight();
-        return ResizeRendererAsync(surfaceWidth, surfaceHeight, _lifetime.Token);
-    }
-
-    private async Task ResizeRendererAsync(double surfaceWidth, double surfaceHeight, CancellationToken cancellationToken = default)
-    {
-        var pixelWidth = Math.Max(1, (int)Math.Round(surfaceWidth * HdrSwapChainHost.CompositionScaleX));
-        var pixelHeight = Math.Max(1, (int)Math.Round(surfaceHeight * HdrSwapChainHost.CompositionScaleY));
-        try
-        {
-            await _renderer.ResizeAsync(pixelWidth, pixelHeight, cancellationToken == default ? _lifetime.Token : cancellationToken);
-        }
-        catch (OperationCanceledException)
-        {
-            // Expected when the view is torn down or a newer resize supersedes this one.
-        }
-        catch (ObjectDisposedException)
-        {
-            // Renderer was disposed while a resize was in flight.
-        }
-        catch (Exception ex)
-        {
-            // A GPU/swap-chain failure (e.g. DXGI_ERROR_DEVICE_REMOVED) must not
-            // crash the app from a fire-and-forget event handler; surface it instead.
-            ViewModel.UpdateRenderStatus($"渲染器调整失败: {ex.GetType().Name}: {ex.Message}");
-        }
-    }
 
     private bool UpdateImageSurfaceLayout()
     {
@@ -2406,8 +2479,6 @@ public sealed partial class HomePage : Page
         ImageViewport.Height = viewportHeight;
         ImageSurface.Width = targetWidth;
         ImageSurface.Height = targetHeight;
-        HdrSwapChainHost.Width = ImageSurface.Width;
-        HdrSwapChainHost.Height = ImageSurface.Height;
         FallbackImage.Width = ImageSurface.Width;
         FallbackImage.Height = ImageSurface.Height;
         ImageSurface.Clip = new RectangleGeometry
@@ -2415,6 +2486,11 @@ public sealed partial class HomePage : Page
             Rect = new Windows.Foundation.Rect(0.0, 0.0, ImageSurface.Width, ImageSurface.Height)
         };
         ImageSurface.UpdateLayout();
+        if (!_isZoomPreviewActive)
+        {
+            ApplySwapChainHostPlacement(targetWidth, targetHeight);
+        }
+
         return changed;
     }
 
@@ -2451,6 +2527,7 @@ public sealed partial class HomePage : Page
 
         var horizontalOffset = Math.Max(0.0, (ImageViewport.Width - PreviewSurface.ActualWidth) / 2.0);
         var verticalOffset = Math.Max(0.0, (ImageViewport.Height - PreviewSurface.ActualHeight) / 2.0);
+        SetLayoutScrollOverride(horizontalOffset, verticalOffset);
         ImageScroller.ChangeView(horizontalOffset, verticalOffset, null, true);
     }
 
@@ -2598,10 +2675,13 @@ public sealed partial class HomePage : Page
         var imageTop = Math.Max(0.0, (ImageViewport.Height - ImageSurface.Height) / 2.0);
         var viewportX = Math.Clamp(anchorViewportX, 0.0, Math.Max(0.0, PreviewSurface.ActualWidth));
         var viewportY = Math.Clamp(anchorViewportY, 0.0, Math.Max(0.0, PreviewSurface.ActualHeight));
+        var maxScrollX = Math.Max(0.0, ImageViewport.Width - PreviewSurface.ActualWidth);
+        var maxScrollY = Math.Max(0.0, ImageViewport.Height - PreviewSurface.ActualHeight);
         var targetOffsetX = imageLeft + (ImageSurface.Width * Math.Clamp(anchorX, 0.0, 1.0)) - viewportX;
         var targetOffsetY = imageTop + (ImageSurface.Height * Math.Clamp(anchorY, 0.0, 1.0)) - viewportY;
-        targetOffsetX = Math.Clamp(targetOffsetX, 0.0, ImageScroller.ScrollableWidth);
-        targetOffsetY = Math.Clamp(targetOffsetY, 0.0, ImageScroller.ScrollableHeight);
+        targetOffsetX = Math.Clamp(targetOffsetX, 0.0, maxScrollX);
+        targetOffsetY = Math.Clamp(targetOffsetY, 0.0, maxScrollY);
+        SetLayoutScrollOverride(targetOffsetX, targetOffsetY);
         ImageScroller.ChangeView(targetOffsetX, targetOffsetY, null, disableAnimation: true);
     }
 
@@ -2634,47 +2714,15 @@ public sealed partial class HomePage : Page
         }
     }
 
-    private static void RequestImageLoadMemoryTrim()
-    {
-        // Debounced: a blocking gen-2 + LOH-compacting collection per image made
-        // rapid folder navigation pay a full-GC pause for every frame advance.
-        // Trim once after the user settles instead.
-        s_memoryTrimTimer.Change(MemoryTrimDebounceDelay, Timeout.InfiniteTimeSpan);
-    }
-
-    private static void TrimImageLoadMemory()
-    {
-        // Non-blocking background collection: the previous aggressive blocking
-        // compacting collect suspended every thread (including UI) while the
-        // LOH was compacted, which showed up as a visible hitch right after
-        // navigation settled. The background sweep still frees the dropped
-        // decode buffers for reuse; CompactOnce stays set so the next natural
-        // blocking full GC compacts the LOH.
-        GCSettings.LargeObjectHeapCompactionMode = GCLargeObjectHeapCompactionMode.CompactOnce;
-        GC.Collect(2, GCCollectionMode.Forced, blocking: false, compacting: false);
-    }
-
     private int CalculateViewerPreloadMaxPixelSize()
     {
-        // Same formula as the renderer's own decode request. The viewport is
-        // always at least as large as the fitted swap chain, so deriving the
-        // preload target from the viewport guarantees the cached decode
-        // satisfies the renderer's size check; the previous smaller 1.25x /
-        // 2048-capped target made hot preloads undersized and unusable.
+        // Same formula as the renderer's own decode request. The swap chain is
+        // viewport-sized, so adjacent preloads derived from PreviewSurface stay
+        // usable after zoom.
         var compositionScale = Math.Max(HdrSwapChainHost?.CompositionScaleX ?? 1.0, HdrSwapChainHost?.CompositionScaleY ?? 1.0);
         var width = PreviewSurface?.ActualWidth > 0.0 ? PreviewSurface.ActualWidth : 1280.0;
         var height = PreviewSurface?.ActualHeight > 0.0 ? PreviewSurface.ActualHeight : 900.0;
         return D3D11HdrRenderPipeline.CalculateDecodeTargetForSurface(Math.Max(width, height) * compositionScale);
-    }
-
-    private double GetRenderSurfaceWidth()
-    {
-        return ImageSurface.Width is > 0.0 ? ImageSurface.Width : HdrSwapChainHost.ActualWidth;
-    }
-
-    private double GetRenderSurfaceHeight()
-    {
-        return ImageSurface.Height is > 0.0 ? ImageSurface.Height : HdrSwapChainHost.ActualHeight;
     }
 
     private static bool ShouldUseEdidPeakFallback(

@@ -106,7 +106,9 @@ Live Photo support is layered on top of the existing still-image pipeline instea
 ## Performance Notes
 
 - `ImagePreloadCache` stores metadata/load results for the active folder scope. Radius 1 keeps decoded pixels for hot neighbours; wider radius is metadata-first.
-- Decoded preload cache is trimmed to 320 MB, and LOH compaction is requested after image loads.
+- Decoded preload cache is trimmed to 320 MB. Gen-2 collection and LOH compaction are requested only when `ImageMemoryPressureService` sees a large eviction plus high memory load.
+- The FP16 swap chain is sized to the visible preview viewport. Pan and zoom update shader `ImageLayout` and redraw; `ResizeBuffers` runs only when the physical viewport changes.
+- `FolderImageIndexCache` keeps a watcher-backed snapshot of each browsed directory so filmstrip/navigation does not re-enumerate on every image.
 - `DirectoryMetadataCache` keeps per-directory metadata in memory and flushes one JSON file per directory (named by a SHA-256 hash of the directory path) under `%LocalAppData%\HdrImageViewer\metadata-cache\` in debounced batches; legacy in-folder `.hdrimageviewer.meta.json` files are still read as a fallback.
 - LibHeifSharp HEIF/AVIF decode expands 10/12-bit samples to 16-bit in `Parallel.For` over rows and reports per-phase timings on the status line.
 - Thumbnail loading is cancellable, focus-ordered, and limited to a nearby window.
