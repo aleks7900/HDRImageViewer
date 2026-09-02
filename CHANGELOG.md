@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 1.0.30.0 - 2026-09-02
+
 - Sized the HDR swap chain to the visible preview viewport instead of the zoomed logical image, and pan/zoom now update shader `ImageLayout` without `ResizeBuffers`.
 - Restored follow-the-finger zoom: wheel, pinch, and zoom buttons scale the current HDR frame around the pointer, then re-render the sharp crop after the gesture settles.
 - When the image is smaller than the window, the HDR surface is centered at image size so the canvas keeps the page background instead of turning black.
