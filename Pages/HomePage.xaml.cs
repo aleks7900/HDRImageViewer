@@ -1632,7 +1632,37 @@ public sealed partial class HomePage : Page
 
     private async void ApplyCrop_Click(object sender, RoutedEventArgs e)
     {
-        await ExportCurrentCropAsync();
+        if (_isExportInProgress || sender is not Button button || !button.IsEnabled)
+        {
+            return;
+        }
+
+        button.IsEnabled = false;
+        try
+        {
+            await ExportCurrentCropAsync();
+        }
+        catch (Exception ex)
+        {
+            await ShowCropExportErrorAsync(ex.Message);
+        }
+        finally
+        {
+            button.IsEnabled = true;
+        }
+    }
+
+    private async Task ShowCropExportErrorAsync(string message)
+    {
+        ViewModel.UpdateRenderStatus($"{_renderer.LastRenderStatus}; 裁切保存失败: {message}");
+        var dialog = new ContentDialog
+        {
+            XamlRoot = XamlRoot,
+            Title = "无法保存裁切图片",
+            Content = message,
+            CloseButtonText = "确定",
+        };
+        await dialog.ShowAsync();
     }
 
     private async void SingleLayerHdrSaveAs_Click(object sender, RoutedEventArgs e)

@@ -5,6 +5,23 @@ namespace HdrImageViewer.Tests;
 
 public sealed class ViewerViewportMathTests
 {
+    [Theory]
+    [InlineData(4000, 3000, 1000, 750, 2000, 1500)]
+    [InlineData(3000, 4000, 750, 1000, 1500, 2000)]
+    public void Crop_UsesFullSourceDimensionsIncludingPortraitOrientation(
+        uint width, uint height, uint x, uint y, uint cropWidth, uint cropHeight)
+    {
+        var crop = ViewerViewportMath.CalculateCropPixels(0.25, 0.25, 0.75, 0.75, width, height);
+        Assert.Equal((x, y, cropWidth, cropHeight), crop);
+    }
+
+    [Fact]
+    public void Crop_ClampsEdgesToSourcePixels()
+    {
+        Assert.Equal((0u, 0u, 4031u, 3023u),
+            ViewerViewportMath.CalculateCropPixels(-0.1, -0.2, 1.1, 1.2, 4031, 3023));
+    }
+
     [Fact]
     public void CalculateFitSize_KeepsImageInsideViewport()
     {

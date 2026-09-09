@@ -116,9 +116,22 @@ public sealed partial class HomePage
             return;
         }
 
-        if (!TryCalculateCropBounds(out var bounds))
+        var pixelWidth = (uint)Math.Max(0, _renderer.ContentPixelWidth);
+        var pixelHeight = (uint)Math.Max(0, _renderer.ContentPixelHeight);
+        if (SelectedCropExportMode == CropExportMode.SdrPreview)
         {
-            ViewModel.UpdateRenderStatus($"{_renderer.LastRenderStatus}; 裁切失败: 裁切框没有覆盖图片");
+            // SDR display bypasses D3D. Use the same source and orientation as
+            // the export decoder, never the renderer's empty or stale texture.
+            await using var input = File.OpenRead(_currentDocument.Path);
+            using var stream = input.AsRandomAccessStream();
+            var decoder = await BitmapDecoder.CreateAsync(stream);
+            pixelWidth = decoder.OrientedPixelWidth;
+            pixelHeight = decoder.OrientedPixelHeight;
+        }
+
+        if (!TryCalculateCropBounds(out var bounds, pixelWidth, pixelHeight))
+        {
+            await ShowCropExportErrorAsync("裁切框没有覆盖有效图片区域，请重新调整裁切框。");
             return;
         }
 
@@ -209,7 +222,7 @@ public sealed partial class HomePage
         }
         catch (Exception ex)
         {
-            ViewModel.UpdateRenderStatus($"{_renderer.LastRenderStatus}; 裁切导出失败: {ex.GetType().Name}: {ex.Message}");
+            await ShowCropExportErrorAsync(ex.Message);
         }
         finally
         {

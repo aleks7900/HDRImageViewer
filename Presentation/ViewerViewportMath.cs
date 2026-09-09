@@ -2,6 +2,21 @@ namespace HdrImageViewer.Presentation;
 
 internal static class ViewerViewportMath
 {
+    public static (uint X, uint Y, uint Width, uint Height) CalculateCropPixels(
+        double left, double top, double right, double bottom, uint pixelWidth, uint pixelHeight)
+    {
+        if (pixelWidth == 0 || pixelHeight == 0)
+        {
+            return default;
+        }
+
+        var x = (uint)Math.Clamp(Math.Round(left * pixelWidth), 0.0, pixelWidth - 1.0);
+        var y = (uint)Math.Clamp(Math.Round(top * pixelHeight), 0.0, pixelHeight - 1.0);
+        var endX = (uint)Math.Clamp(Math.Round(right * pixelWidth), x + 1.0, pixelWidth);
+        var endY = (uint)Math.Clamp(Math.Round(bottom * pixelHeight), y + 1.0, pixelHeight);
+        return (x, y, endX - x, endY - y);
+    }
+
     public static (double Width, double Height) CalculateFitSize(
         double availableWidth,
         double availableHeight,

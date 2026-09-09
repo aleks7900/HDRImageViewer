@@ -298,11 +298,11 @@ public sealed partial class HomePage
         _ => UltraHdrSdrBaseColorGamut.Auto,
     };
 
-    private bool TryCalculateCropBounds(out BitmapBounds bounds)
+    private bool TryCalculateCropBounds(out BitmapBounds bounds, uint pixelWidth, uint pixelHeight)
     {
         bounds = default;
-        if (_renderer.ContentPixelWidth <= 0
-            || _renderer.ContentPixelHeight <= 0
+        if (pixelWidth == 0
+            || pixelHeight == 0
             || ImageSurface.ActualWidth <= 1.0
             || ImageSurface.ActualHeight <= 1.0)
         {
@@ -321,16 +321,16 @@ public sealed partial class HomePage
             return false;
         }
 
-        var pixelLeft = (uint)Math.Clamp(Math.Round(left / ImageSurface.ActualWidth * _renderer.ContentPixelWidth), 0.0, _renderer.ContentPixelWidth - 1.0);
-        var pixelTop = (uint)Math.Clamp(Math.Round(top / ImageSurface.ActualHeight * _renderer.ContentPixelHeight), 0.0, _renderer.ContentPixelHeight - 1.0);
-        var pixelRight = (uint)Math.Clamp(Math.Round(right / ImageSurface.ActualWidth * _renderer.ContentPixelWidth), pixelLeft + 1.0, _renderer.ContentPixelWidth);
-        var pixelBottom = (uint)Math.Clamp(Math.Round(bottom / ImageSurface.ActualHeight * _renderer.ContentPixelHeight), pixelTop + 1.0, _renderer.ContentPixelHeight);
+        var pixels = ViewerViewportMath.CalculateCropPixels(
+            left / ImageSurface.ActualWidth, top / ImageSurface.ActualHeight,
+            right / ImageSurface.ActualWidth, bottom / ImageSurface.ActualHeight,
+            pixelWidth, pixelHeight);
         bounds = new BitmapBounds
         {
-            X = pixelLeft,
-            Y = pixelTop,
-            Width = pixelRight - pixelLeft,
-            Height = pixelBottom - pixelTop,
+            X = pixels.X,
+            Y = pixels.Y,
+            Width = pixels.Width,
+            Height = pixels.Height,
         };
         return bounds.Width > 0 && bounds.Height > 0;
     }
