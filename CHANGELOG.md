@@ -5,6 +5,7 @@
 ## 1.0.31.0 - 2026-09-09
 
 - Fixed crop export to calculate SDR preview bounds from the source image's oriented pixel dimensions instead of a potentially stale HDR renderer texture. Crop bounds are now centrally clamped for landscape and portrait images, and failed or duplicate crop saves now report a clear dialog without starting overlapping exports.
+- Stabilized the shared-operation cancellation regression test used by the release build so it waits for the operation to register its cancellation callback before canceling its final waiter.
 
 ## 1.0.30.0 - 2026-09-02
 

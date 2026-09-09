@@ -32,16 +32,19 @@ public sealed class SharedAsyncOperationTests
     [Fact]
     public async Task WaitAsync_CancelsSharedWorkAfterLastWaiterLeaves()
     {
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var sharedCancellation = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         using var operation = new SharedAsyncOperation<int>(async token =>
         {
             using var registration = token.Register(() => sharedCancellation.TrySetResult());
+            started.TrySetResult();
             await Task.Delay(Timeout.InfiniteTimeSpan, token);
             return 0;
         });
         using var waiterCancellation = new CancellationTokenSource();
 
         var waiter = operation.WaitAsync(waiterCancellation.Token);
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(2));
         waiterCancellation.Cancel();
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => waiter);
