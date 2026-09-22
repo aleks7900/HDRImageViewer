@@ -79,7 +79,7 @@ public static class UltraHdrGainMapDecoder
             cancellationToken);
     }
 
-    private static async Task<byte[]> ReadSegmentAsync(
+    internal static async Task<byte[]> ReadSegmentAsync(
         string path,
         long offset,
         int count,

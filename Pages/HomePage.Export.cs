@@ -29,6 +29,16 @@ namespace HdrImageViewer.Pages;
 
 public sealed partial class HomePage
 {
+    private CancellationTokenSource? _exportCancellation;
+    private CancellationToken ExportToken => _exportCancellation?.Token ?? _lifetime.Token;
+
+    private void CancelExport_Click(object sender, RoutedEventArgs e)
+    {
+        _exportCancellation?.Cancel();
+        CancelExportButton.IsEnabled = false;
+        UpdateExportProgress("正在取消，等待当前操作结束…");
+    }
+
     private async Task<bool> TryBeginExportProgressAsync(string title, string detail)
     {
         if (_isExportInProgress)
@@ -37,6 +47,8 @@ public sealed partial class HomePage
             return false;
         }
 
+        _exportCancellation = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token);
+        CancelExportButton.IsEnabled = true;
         _isExportInProgress = true;
         SetExportProgress(title, detail);
         if (ExportProgressOverlay is not null)
@@ -62,6 +74,8 @@ public sealed partial class HomePage
 
     private void EndExportProgress()
     {
+        _exportCancellation?.Dispose();
+        _exportCancellation = null;
         _isExportInProgress = false;
         if (ExportProgressRing is not null)
         {
@@ -169,7 +183,7 @@ public sealed partial class HomePage
         picker.FileTypeChoices.Add("TIFF 16-bit SDR 预览", [".tif"]);
         picker.FileTypeChoices.Add("JPEG SDR 预览", [".jpg"]);
 
-        var outputFile = await PickSaveStorageFileAsync(picker);
+        var outputFile = await PickSaveDestinationAsync(picker);
         if (outputFile is null)
         {
             return;
@@ -184,7 +198,8 @@ public sealed partial class HomePage
                 return;
             }
 
-            CachedFileManager.DeferUpdates(outputFile);
+            using var transaction = new ExportFileTransaction(outputFile.Path);
+            ExportToken.ThrowIfCancellationRequested();
             await using var inputStream = File.OpenRead(_currentDocument.Path);
             using var source = inputStream.AsRandomAccessStream();
             var decoder = await BitmapDecoder.CreateAsync(source);
@@ -199,26 +214,32 @@ public sealed partial class HomePage
                 ColorManagementMode.ColorManageToSRgb);
 
             UpdateExportProgress($"正在编码 {exportFormat.DisplayName}");
-            await using var output = await outputFile.OpenStreamForWriteAsync();
-            output.SetLength(0);
-            using var destination = output.AsRandomAccessStream();
-            var encoder = await BitmapEncoder.CreateAsync(exportFormat.EncoderId, destination);
-            encoder.SetPixelData(
-                exportFormat.PixelFormat,
-                exportFormat.AlphaMode,
-                bounds.Width,
-                bounds.Height,
-                decoder.DpiX,
-                decoder.DpiY,
-                pixelData.DetachPixelData());
-            await encoder.FlushAsync();
-            await CachedFileManager.CompleteUpdatesAsync(outputFile);
+            ExportToken.ThrowIfCancellationRequested();
+            await using (var output = new FileStream(transaction.TemporaryPath, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None))
+            {
+                using var destination = output.AsRandomAccessStream();
+                var encoder = await BitmapEncoder.CreateAsync(exportFormat.EncoderId, destination);
+                encoder.SetPixelData(
+                    exportFormat.PixelFormat,
+                    exportFormat.AlphaMode,
+                    bounds.Width,
+                    bounds.Height,
+                    decoder.DpiX,
+                    decoder.DpiY,
+                    pixelData.DetachPixelData());
+                await encoder.FlushAsync();
+            }
+            transaction.Commit(ExportToken);
 
             SetCropMode(false);
             var hdrNote = IsHdrCropExportPreview(_currentDocument)
                 ? "; 注意: 当前导出为 SDR 预览裁切，不保留 HLG/PQ/gain-map HDR 元数据"
                 : string.Empty;
             ViewModel.UpdateRenderStatus($"{_renderer.LastRenderStatus}; 已导出裁切 {exportFormat.DisplayName}: {outputFile.Path}{hdrNote}");
+        }
+        catch (OperationCanceledException)
+        {
+            ViewModel.UpdateRenderStatus("已取消导出，目标文件未更改。");
         }
         catch (Exception ex)
         {
@@ -263,7 +284,7 @@ public sealed partial class HomePage
         };
         AddAvailableExportChoices(picker, HdrExportMode.GainMap);
 
-        var outputFile = await PickSaveStorageFileAsync(picker);
+        var outputFile = await PickSaveDestinationAsync(picker);
         if (outputFile is null)
         {
             return;
@@ -278,19 +299,21 @@ public sealed partial class HomePage
                 return;
             }
 
-            await DeleteUnwrittenPickerFileAsync(outputFile);
             UpdateExportProgress("正在裁切 base 与 gain-map，并调用 libultrahdr 封装");
             var exportSummary = await GainMapHdrExportService.ExportPreservedJpegGainMapCropAsync(
                 _currentDocument,
                 bounds,
                 outputFile.Path,
-                _lifetime.Token);
+                ExportToken);
             SetCropMode(false);
             ViewModel.UpdateRenderStatus($"{_renderer.LastRenderStatus}; 已导出 Gain-map 保真裁切: {outputFile.Path}; {exportSummary}");
         }
+        catch (OperationCanceledException)
+        {
+            ViewModel.UpdateRenderStatus("已取消导出，目标文件未更改。");
+        }
         catch (Exception ex)
         {
-            await DeleteUnwrittenPickerFileAsync(outputFile);
             ViewModel.UpdateRenderStatus($"{_renderer.LastRenderStatus}; Gain-map 保真裁切失败: {ex.GetType().Name}: {ex.Message}");
         }
         finally
@@ -333,7 +356,7 @@ public sealed partial class HomePage
         };
         AddAvailableExportChoices(picker, HdrExportMode.GainMap);
 
-        var outputFile = await PickSaveStorageFileAsync(picker);
+        var outputFile = await PickSaveDestinationAsync(picker);
         if (outputFile is null)
         {
             return;
@@ -348,20 +371,22 @@ public sealed partial class HomePage
                 return;
             }
 
-            await DeleteUnwrittenPickerFileAsync(outputFile);
             UpdateExportProgress($"正在编码 {DescribeUltraHdrGainMapChannelMode(SelectedUltraHdrGainMapChannelMode)} gain-map JPEG");
             var exportSummary = await GainMapHdrExportService.ExportJpegUltraHdrAsync(
                 _currentDocument,
                 bounds,
                 outputFile.Path,
                 new UltraHdrExportOptions(SelectedUltraHdrGainMapChannelMode, SelectedUltraHdrSdrBaseColorGamut),
-                _lifetime.Token);
+                ExportToken);
             SetCropMode(false);
             ViewModel.UpdateRenderStatus($"{_renderer.LastRenderStatus}; 已转为 Ultra HDR: {outputFile.Path}; {exportSummary}");
         }
+        catch (OperationCanceledException)
+        {
+            ViewModel.UpdateRenderStatus("已取消导出，目标文件未更改。");
+        }
         catch (Exception ex)
         {
-            await DeleteUnwrittenPickerFileAsync(outputFile);
             ViewModel.UpdateRenderStatus($"{_renderer.LastRenderStatus}; 转为 Ultra HDR 失败: {ex.GetType().Name}: {ex.Message}");
         }
         finally
@@ -399,7 +424,7 @@ public sealed partial class HomePage
         };
         AddAvailableExportChoices(picker, HdrExportMode.SingleLayer);
 
-        var outputFile = await PickSaveStorageFileAsync(picker);
+        var outputFile = await PickSaveDestinationAsync(picker);
         if (outputFile is null)
         {
             return;
@@ -415,7 +440,6 @@ public sealed partial class HomePage
                 return;
             }
 
-            await DeleteUnwrittenPickerFileAsync(outputFile);
             var exportTransfer = transfer == CropHdrTransfer.Hlg
                 ? SingleLayerHdrExportTransfer.Hlg
                 : SingleLayerHdrExportTransfer.Pq;
@@ -425,16 +449,19 @@ public sealed partial class HomePage
                 bounds,
                 outputFile.Path,
                 exportTransfer,
-                _lifetime.Token);
+                ExportToken);
 
             SetCropMode(false);
             var transferLabel = transfer == CropHdrTransfer.Hlg ? "HLG" : "PQ";
             ViewModel.UpdateRenderStatus(
                 $"{_renderer.LastRenderStatus}; 已导出单层 HDR {transferLabel}: {outputFile.Path}; {exportSummary}; {bounds.Width}x{bounds.Height}");
         }
+        catch (OperationCanceledException)
+        {
+            ViewModel.UpdateRenderStatus("已取消导出，目标文件未更改。");
+        }
         catch (Exception ex)
         {
-            await DeleteUnwrittenPickerFileAsync(outputFile);
             ViewModel.UpdateRenderStatus($"{_renderer.LastRenderStatus}; 单层 HDR 裁切导出失败: {ex.GetType().Name}: {ex.Message}");
         }
         finally
@@ -691,7 +718,7 @@ public sealed partial class HomePage
         };
         AddAvailableExportChoices(picker, exportMode);
 
-        var outputFile = await PickSaveStorageFileAsync(picker);
+        var outputFile = await PickSaveDestinationAsync(picker);
         if (outputFile is null)
         {
             return;
@@ -712,7 +739,6 @@ public sealed partial class HomePage
                 return;
             }
 
-            await DeleteUnwrittenPickerFileAsync(outputFile);
             string exportSummary;
             if (mode == SaveAsExportMode.SingleLayerHdr)
             {
@@ -725,7 +751,7 @@ public sealed partial class HomePage
                     outputFile.Path,
                     exportTransfer,
                     CreateSingleLayerSaveAsOptions(options),
-                    _lifetime.Token);
+                    ExportToken);
             }
             else if (mode == SaveAsExportMode.GainMapPreserve)
             {
@@ -735,7 +761,7 @@ public sealed partial class HomePage
                 }
 
                 UpdateExportProgress("正在复制原始 JPEG gain-map bitstream");
-                File.Copy(document.Path, outputFile.Path, overwrite: true);
+                await ExportFileTransaction.CopyAsync(document.Path, outputFile.Path, ExportToken);
                 exportSummary = "preserved original JPEG gain-map bitstream";
             }
             else
@@ -745,7 +771,7 @@ public sealed partial class HomePage
                     document,
                     outputFile.Path,
                     new UltraHdrExportOptions(options.UltraHdrGainMapChannelMode, options.UltraHdrSdrBaseColorGamut),
-                    _lifetime.Token);
+                    ExportToken);
             }
 
             var transferLabel = transfer == CropHdrTransfer.Hlg ? "HLG" : "PQ";
@@ -755,9 +781,12 @@ public sealed partial class HomePage
             ViewModel.UpdateRenderStatus(
                 $"{_renderer.LastRenderStatus}; 已另存为 {modeLabel}: {outputFile.Path}; {exportSummary}");
         }
+        catch (OperationCanceledException)
+        {
+            ViewModel.UpdateRenderStatus("已取消导出，目标文件未更改。");
+        }
         catch (Exception ex)
         {
-            await DeleteUnwrittenPickerFileAsync(outputFile);
             ViewModel.UpdateRenderStatus($"{_renderer.LastRenderStatus}; HDR 另存为失败: {ex.GetType().Name}: {ex.Message}");
         }
         finally
@@ -955,38 +984,15 @@ public sealed partial class HomePage
         };
     }
 
-    private static async Task<StorageFile?> PickSaveStorageFileAsync(FileSavePicker picker)
+    private sealed record ExportDestination(string Path)
     {
-        var result = await picker.PickSaveFileAsync();
-        if (result is null)
-        {
-            return null;
-        }
-
-        if (!File.Exists(result.Path))
-        {
-            await using var placeholder = new FileStream(
-                result.Path,
-                FileMode.CreateNew,
-                FileAccess.Write,
-                FileShare.Read,
-                bufferSize: 1,
-                useAsync: true);
-        }
-
-        return await StorageFile.GetFileFromPathAsync(result.Path);
+        public string FileType => System.IO.Path.GetExtension(Path);
     }
 
-    private static async Task DeleteUnwrittenPickerFileAsync(StorageFile file)
+    private static async Task<ExportDestination?> PickSaveDestinationAsync(FileSavePicker picker)
     {
-        try
-        {
-            await file.DeleteAsync(StorageDeleteOption.PermanentDelete);
-        }
-        catch
-        {
-            // Best-effort cleanup: the important part is that unsupported HDR exports never write fake image data.
-        }
+        var result = await picker.PickSaveFileAsync();
+        return result is null ? null : new ExportDestination(result.Path);
     }
 
     private static bool HasExecutableOnPath(string fileName)

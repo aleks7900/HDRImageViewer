@@ -3,7 +3,7 @@
     <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0-windows10.0.26100.0</TargetFramework>
     <TargetPlatformMinVersion>10.0.26100.0</TargetPlatformMinVersion>
-    <Version>1.0.31.0</Version>
+    <Version>1.0.32.0</Version>
     <RootNamespace>HdrImageViewer</RootNamespace>
     <ApplicationIcon>Assets\AppIcon.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
@@ -52,6 +52,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="Rendering\Data\CIE_xyz_1931_2deg.csv" LogicalName="HdrImageViewer.CIE1931" />
+    <Content Include="Rendering\Data\NOTICE.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <EmbeddedResource Include="Rendering\Shaders\GainMap.VS.cso"
                       LogicalName="HdrImageViewer.Rendering.Shaders.GainMap.VS.cso"
                       WithCulture="false" />

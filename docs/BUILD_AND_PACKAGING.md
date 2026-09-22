@@ -8,12 +8,12 @@ This document records the current local build, dependency, package, and sync lay
 - Target: `net10.0-windows10.0.26100.0`.
 - Windows App SDK: `2.2.0`.
 - WinApp BuildTools: `0.4.0`.
-- Current project/MSIX version: `1.0.28.0`.
+- Current project/MSIX version: `1.0.32.0`.
 - Current maintained native dependency platform: x64.
 - Current local package output:
 
 ```text
-AppPackages\HdrImageViewer_1.0.28.0_x64_Test
+AppPackages\HdrImageViewer_1.0.32.0_x64_Test
 ```
 
 ## Local Build
@@ -37,7 +37,7 @@ Launch verification should use `dotnet run`; directly starting the built exe can
 Build a local portable zip:
 
 ```powershell
-.\eng\publish-portable.ps1 -Version 1.0.28.0 -Platform x64
+.\eng\publish-portable.ps1 -Version 1.0.32.0 -Platform x64
 ```
 
 If `-Version` is omitted, `eng\publish-portable.ps1` reads the version from `HdrImageViewer.csproj`.
@@ -61,7 +61,7 @@ Build and sign a local x64 MSIX package:
 The script generates and signs:
 
 ```text
-AppPackages\HdrImageViewer_1.0.28.0_x64_Test\HdrImageViewer_1.0.28.0_x64.msix
+AppPackages\HdrImageViewer_1.0.32.0_x64_Test\HdrImageViewer_1.0.32.0_x64.msix
 ```
 
 If `-PfxPath` is omitted, the script still generates the MSIX but leaves it unsigned. A clean machine must trust the matching certificate before installing a self-signed sideload package.
@@ -185,3 +185,21 @@ Keep these out of git:
 - `PublishTrimmed=false` is intentional. Trimming can break reflection-based settings and WinRT interop in ways that surface as lost settings rather than obvious crashes.
 - Re-check `THIRD_PARTY_NOTICES.md` before publishing a portable zip, MSIX, or Store package that actually carries third-party native codec tools.
 - Keep open-source license obligations separate from HEVC patent/commercial risk. IPC calls to user-installed tools do not create a binary redistribution event for this package; bundling those tools does.
+
+## Native codec verification
+
+The EXR/JXL integration tests report missing native libraries, converters or local fixtures as **skipped**, not passed. For an environment that must validate every native integration test, use:
+
+```powershell
+$previousNativeTestRequirement = $env:HDRVIEWER_REQUIRE_NATIVE_TESTS
+try {
+    $env:HDRVIEWER_REQUIRE_NATIVE_TESTS = '1'
+    dotnet test tests/HdrImageViewer.Tests/HdrImageViewer.Tests.csproj -c Release --nologo
+    if ($LASTEXITCODE -ne 0) { throw 'Native codec verification failed.' }
+}
+finally {
+    $env:HDRVIEWER_REQUIRE_NATIVE_TESTS = $previousNativeTestRequirement
+}
+```
+
+Strict mode fails when prerequisites are missing. An ordinary passing unit-test run with skipped codec tests is not evidence of native-format coverage.

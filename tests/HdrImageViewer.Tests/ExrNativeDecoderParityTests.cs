@@ -10,18 +10,29 @@ namespace HdrImageViewer.Tests;
 /// <see cref="NativeExrDecoder.Decode"/>, then force the fallback by feeding the
 /// same EXR through <c>oiiotool</c>/<c>magick</c> → PFM →
 /// <see cref="PortableImageReader.ReadPfmAsLinearScRgb"/> and assert the two
-/// produce identical pixels. Skips silently when the native EXR library or an
+/// produce identical pixels. Reports a skip when the native EXR library or an
 /// external EXR→PFM converter is not available (fresh checkouts / CI).
 /// </summary>
 public sealed class ExrNativeDecoderParityTests
 {
-    [Fact]
+    public sealed class ExrFactAttribute : FactAttribute
+    {
+        public ExrFactAttribute(bool requiresConverter = false)
+        {
+            if (Environment.GetEnvironmentVariable("HDRVIEWER_REQUIRE_NATIVE_TESTS") != "1")
+                Skip = MissingDependency(requiresConverter);
+        }
+    }
+
+    private static string? MissingDependency(bool requiresConverter) =>
+        !RuntimeInformation.IsOSPlatform(OSPlatform.Windows) || !NativeExrDecoder.IsAvailable
+            ? "Requires Windows and the native OpenEXR library." :
+        requiresConverter && FindExrToPfmConverter() is null ? "Requires an EXR to PFM converter." : null;
+
+    [ExrFact]
     public void EncodeThenNativeDecodeRoundTripsRgba16f()
     {
-        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows) || !NativeExrDecoder.IsAvailable)
-        {
-            return;
-        }
+        Assert.Null(MissingDependency(false));
 
         const int width = 64;
         const int height = 48;
@@ -52,19 +63,13 @@ public sealed class ExrNativeDecoderParityTests
         }
     }
 
-    [Fact]
+    [ExrFact(true)]
     public async Task ExternalPfmFallbackMatchesNativeDecode()
     {
-        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows) || !NativeExrDecoder.IsAvailable)
-        {
-            return;
-        }
+        Assert.Null(MissingDependency(false));
 
-        var converter = FindExrToPfmConverter();
-        if (converter is null)
-        {
-            return;
-        }
+        Assert.Null(MissingDependency(true));
+        var converter = FindExrToPfmConverter()!;
 
         const int width = 32;
         const int height = 24;

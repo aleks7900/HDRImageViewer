@@ -112,6 +112,7 @@ public sealed partial class HomePage
                 effectiveCancellationToken.ThrowIfCancellationRequested();
                 await _renderer.RedrawAsync(viewport, effectiveCancellationToken);
                 RememberPresentedImageSize();
+                PositionComparisonDivider();
             }
             while (_viewportPresentDirty && !effectiveCancellationToken.IsCancellationRequested);
         }

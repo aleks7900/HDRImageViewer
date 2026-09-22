@@ -971,7 +971,7 @@ public sealed partial class D3D11HdrRenderPipeline : IHdrRenderPipeline, IDispos
         _context.PSSetShaderResources(0, [_primaryTextureView, _gainMapTextureView]);
         _context.PSSetSampler(0, _linearClampSampler);
         _context.PSSetConstantBuffer(0, _gainMapConstantsBuffer);
-        _context.Draw(3, 0);
+        DrawWithViewerTools();
 
         var frameAnalysis = AnalyzeBackBufferIfPending();
         LastFrameHasVisiblePixels = frameAnalysis.HasVisiblePixels;
@@ -1413,7 +1413,7 @@ public sealed partial class D3D11HdrRenderPipeline : IHdrRenderPipeline, IDispos
         }
 
         EnsureRenderTargetView();
-        if (_primaryAnalysisSource?.IsHdrEncoded != true && TryRenderBaseImageWithDirect2D(document))
+        if (!ComparisonEnabled && !_captureAnalysis && _primaryAnalysisSource?.IsHdrEncoded != true && TryRenderBaseImageWithDirect2D(document))
         {
             return;
         }
@@ -1450,7 +1450,7 @@ public sealed partial class D3D11HdrRenderPipeline : IHdrRenderPipeline, IDispos
         _context.PSSetShaderResource(0, _primaryTextureView);
         _context.PSSetSampler(0, _linearClampSampler);
         _context.PSSetConstantBuffer(0, _gainMapConstantsBuffer);
-        _context.Draw(3, 0);
+        DrawWithViewerTools();
 
         var frameAnalysis = AnalyzeBackBufferIfPending();
         LastFrameHasVisiblePixels = frameAnalysis.HasVisiblePixels;
@@ -1500,6 +1500,7 @@ public sealed partial class D3D11HdrRenderPipeline : IHdrRenderPipeline, IDispos
         _gainMapTextureView = null;
         _primaryTexture = null;
         _gainMapTexture = null;
+        AnalysisSnapshot = null;
         _primaryAnalysisSource = null;
         _gainMapAnalysisSource = null;
         _d2dFallbackStatus = null;

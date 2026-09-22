@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 1.0.32.0 - 2026-09-23
+
+- Added a dedicated CIE 1931 xy chromaticity inspector with preview color density, optional sRGB / Display P3 / BT.2020 outlines, D65 reference and a pointer-linked sample marker. Extended scRGB components are preserved during coordinate conversion; black/invalid samples are omitted and stale sample markers are cleared. Includes attributed CIE observer data and coordinate regression tests.
+- Added a separate Analysis inspector with overlapping RGB histogram curves, an SDR-white boundary and HDR exposure-stop grid, preview luminance statistics and pixel sampling. Histogram channels share a square-root count axis; opening Analysis refreshes missing or stale data. Readings describe the display-mapped scRGB preview, not source-file or measured panel luminance.
+- Added draggable HDR/SDR comparison. Both comparison sides share the image viewport; analysis captures the HDR preview before comparison overlays. Inspector content reserves a gutter so overlay scrollbars do not cover charts or controls.
+- Added a serial batch export window with format/folder settings, per-file status, cancellation and retry for unfinished items. Failed files do not stop later items; generated output names preserve existing files. Closing the window cancels the in-memory queue.
+- Preserved existing destination files when export fails or is canceled: SDR crops, HDR exports and original-file copies now stage output beside the destination and replace it only after success. Ultra HDR re-probing happens before committing output, and save pickers no longer pre-delete destinations or create empty placeholders.
+- Added export cancellation and a ten-minute timeout for native CLI operations, with child-process cleanup. Gain-map crop export reads JPEG segments directly instead of duplicating the entire container in memory.
+- Native EXR/JXL integration tests now explicitly report missing prerequisites as skipped; set `HDRVIEWER_REQUIRE_NATIVE_TESTS=1` to require them and fail on missing dependencies. Added regression coverage for destination preservation, staging cleanup, cancellation and native-process timeouts.
+
 ## 1.0.31.0 - 2026-09-09
 
 - Fixed crop export to calculate SDR preview bounds from the source image's oriented pixel dimensions instead of a potentially stale HDR renderer texture. Crop bounds are now centrally clamped for landscape and portrait images, and failed or duplicate crop saves now report a clear dialog without starting overlapping exports.

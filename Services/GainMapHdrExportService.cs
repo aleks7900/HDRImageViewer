@@ -138,14 +138,13 @@ public static class GainMapHdrExportService
             await WriteRgbaHalfFloatRawAsync(rawPath, source, exportBounds, cancellationToken);
             await RunUltraHdrEncodeAsync(cli, rawPath, candidateOutput, exportBounds, resolvedOptions, cancellationToken);
             await VerifyUltraHdrAsync(cli, candidateOutput, metadataPath, cancellationToken);
-            MoveReplacing(candidateOutput, outputPath);
-            var probe = await GainMapJpegProbe.ProbeAsync(outputPath, cancellationToken);
+            var probe = await GainMapJpegProbe.ProbeAsync(candidateOutput, cancellationToken);
             if (!probe.IsRenderableUltraHdr)
             {
-                TryDeleteFile(outputPath);
                 throw new InvalidOperationException($"libultrahdr 已生成 JPEG，但反查未检测到可渲染 gain-map: {probe.DisplayStatus}");
             }
 
+            await ExportFileTransaction.CopyAsync(candidateOutput, outputPath, cancellationToken);
             var metadataSummary = probe.Metadata is null
                 ? "metadata unread"
                 : $"gain max {probe.Metadata.GainMapMax ?? "?"}, capacity {probe.Metadata.HdrCapacityMin ?? "?"}-{probe.Metadata.HdrCapacityMax ?? "?"}";
@@ -178,9 +177,8 @@ public static class GainMapHdrExportService
             throw new InvalidOperationException("Apple HDRGainMap 的增益图语义不同，当前不能用 libultrahdr scenario 4 做保真封装；请先使用“转为 Ultra HDR”。");
         }
 
-        var container = await File.ReadAllBytesAsync(document.Path, cancellationToken);
-        var primaryBytes = container.AsSpan(0, checked((int)probe.PrimaryImageEndOffset!.Value)).ToArray();
-        var gainMapBytes = container.AsSpan(checked((int)probe.GainMapOffset!.Value), probe.GainMapLength!.Value).ToArray();
+        var primaryBytes = await UltraHdrGainMapDecoder.ReadSegmentAsync(document.Path, 0, checked((int)probe.PrimaryImageEndOffset!.Value), cancellationToken);
+        var gainMapBytes = await UltraHdrGainMapDecoder.ReadSegmentAsync(document.Path, probe.GainMapOffset!.Value, probe.GainMapLength!.Value, cancellationToken);
         var primary = await BitmapDecodeService.DecodeBytesAsync(primaryBytes, colorManageToSrgb: true, respectExifOrientation: false, cancellationToken);
         var gainMap = await BitmapDecodeService.DecodeBytesAsync(gainMapBytes, colorManageToSrgb: false, respectExifOrientation: false, cancellationToken);
         if (bounds.X + bounds.Width > primary.PixelWidth || bounds.Y + bounds.Height > primary.PixelHeight)
@@ -204,15 +202,14 @@ public static class GainMapHdrExportService
             await WriteMetadataConfigAsync(probe.Metadata, metadataPath, cancellationToken);
             await RunUltraHdrScenario4Async(cli, basePath, gainPath, metadataPath, candidateOutput, cancellationToken);
             await VerifyUltraHdrAsync(cli, candidateOutput, Path.Combine(tempDir, "verify-metadata.cfg"), cancellationToken);
-            MoveReplacing(candidateOutput, outputPath);
 
-            var outputProbe = await GainMapJpegProbe.ProbeAsync(outputPath, cancellationToken);
+            var outputProbe = await GainMapJpegProbe.ProbeAsync(candidateOutput, cancellationToken);
             if (!outputProbe.IsRenderableUltraHdr)
             {
-                TryDeleteFile(outputPath);
                 throw new InvalidOperationException($"保真裁切已封装 JPEG，但反查未检测到可渲染 gain-map: {outputProbe.DisplayStatus}");
             }
 
+            await ExportFileTransaction.CopyAsync(candidateOutput, outputPath, cancellationToken);
             return $"libultrahdr scenario 4; preserved metadata from {probe.Metadata.Source}; base {bounds.Width}x{bounds.Height}, gain {gainBounds.Width}x{gainBounds.Height}; gain max {outputProbe.Metadata?.GainMapMax ?? "?"}, capacity {outputProbe.Metadata?.HdrCapacityMin ?? "?"}-{outputProbe.Metadata?.HdrCapacityMax ?? "?"}";
         }
         finally
@@ -556,12 +553,6 @@ public static class GainMapHdrExportService
     private static string? FindUltraHdrAppExecutable()
     {
         return NativeToolLocator.FindFirstTool("ultrahdr_app.exe", "uhdr_app.exe", "ultrahdr.exe");
-    }
-
-    private static void MoveReplacing(string source, string destination)
-    {
-        TryDeleteFile(destination);
-        File.Move(source, destination);
     }
 
     private static void TryDeleteFile(string path)

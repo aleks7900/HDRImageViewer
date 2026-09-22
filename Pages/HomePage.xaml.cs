@@ -807,6 +807,7 @@ public sealed partial class HomePage : Page
             ViewModel.ApplyLoadResult(loadResult);
             var document = loadResult.Document;
             _currentDocument = document;
+            ResetViewerToolsForDocument();
             await UpdateHdrModeControlsForDocumentAsync(document, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             if (explicitNavigationPaths is not null)
@@ -1414,6 +1415,7 @@ public sealed partial class HomePage : Page
 
     private void PreviewSurface_PointerMoved(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
     {
+        UpdatePixelSample(e);
         ShowViewerChromeTemporarily();
 
         if (!_isPanning || e.Pointer.PointerId != _panPointerId || ImageScroller is null)

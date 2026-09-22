@@ -24,6 +24,7 @@ cbuffer GainMapConstants : register(b0)
     float4 ToneMapInput;
     float4 ToneMapOutput;
     float4 ViewModeParams;
+    float4 ViewerTools;
 };
 
 VertexOutput VSMain(uint vertexId : SV_VertexID)
@@ -452,6 +453,13 @@ float3 ApplyGainMapOutputMapping(float3 value)
     return ApplyAdaptiveToneMap(value * CalculateGainMapSceneScale());
 }
 
+float4 ApplyViewerTools(float3 mapped, float2 panelUv)
+{
+    clip(panelUv.x - ViewerTools.x);
+    clip(ViewerTools.y - panelUv.x);
+    return float4(mapped, 1.0f);
+}
+
 float4 PSMain(VertexOutput input) : SV_TARGET
 {
     float4 fit = FitToImage(input.TexCoord);
@@ -462,12 +470,12 @@ float4 PSMain(VertexOutput input) : SV_TARGET
 
     if (ViewModeParams.x < 0.5f)
     {
-        return float4(ApplySdrDisplayAdjustment(ConvertGainMapBaseToBt709(sdr)), 1.0f);
+        return ApplyViewerTools(ApplySdrDisplayAdjustment(ConvertGainMapBaseToBt709(sdr)), input.TexCoord);
     }
 
     if (ViewModeParams.x > 2.5f && ViewModeParams.x < 3.5f)
     {
-        return float4(ApplySdrDisplayAdjustment(SrgbToLinear(recovery)), 1.0f);
+        return ApplyViewerTools(ApplySdrDisplayAdjustment(SrgbToLinear(recovery)), input.TexCoord);
     }
 
     float3 hdr = 0.0f;
@@ -484,7 +492,7 @@ float4 PSMain(VertexOutput input) : SV_TARGET
         float3 logBoost = lerp(GainMapMin.rgb, GainMapMax.rgb, logRecovery);
         hdr = (sdr + OffsetSdr.rgb) * exp2(logBoost * CalculateGainMapWeight()) - OffsetHdr.rgb;
     }
-    return float4(ApplyGainMapOutputMapping(ConvertGainMapBaseToBt709(hdr)), 1.0f);
+    return ApplyViewerTools(ApplyGainMapOutputMapping(ConvertGainMapBaseToBt709(hdr)), input.TexCoord);
 }
 
 float4 BaseImagePSMain(VertexOutput input) : SV_TARGET
@@ -494,5 +502,5 @@ float4 BaseImagePSMain(VertexOutput input) : SV_TARGET
     float2 uv = fit.xy;
     float3 encoded = PrimaryTexture.Sample(LinearClampSampler, uv).rgb;
     float3 mapped = DecodeBaseImageSample(encoded);
-    return float4(mapped, 1.0f);
+    return ApplyViewerTools(mapped, input.TexCoord);
 }

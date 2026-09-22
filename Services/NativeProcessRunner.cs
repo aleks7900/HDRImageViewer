@@ -37,8 +37,11 @@ internal static class NativeProcessRunner
     /// <see cref="InvalidOperationException"/> on a non-zero exit code.
     /// </summary>
     /// <returns>The combined, trimmed stdout/stderr text.</returns>
-    public static async Task<string> RunAsync(Process process, string backendName, CancellationToken cancellationToken)
+    public static async Task<string> RunAsync(Process process, string backendName, CancellationToken cancellationToken, TimeSpan? timeout = null)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+        using var deadline = new CancellationTokenSource(timeout ?? TimeSpan.FromMinutes(10));
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadline.Token);
         if (!process.Start())
         {
             throw new InvalidOperationException($"启动 {backendName} 失败。");
@@ -50,11 +53,18 @@ internal static class NativeProcessRunner
         var errorTask = process.StandardError.ReadToEndAsync(CancellationToken.None);
         try
         {
-            await process.WaitForExitAsync(cancellationToken);
+            await process.WaitForExitAsync(linked.Token);
         }
         catch (OperationCanceledException)
         {
             TryKillProcessTree(process);
+            // Observe both pipe readers after terminating the child, including faults.
+            try { await Task.WhenAll(outputTask, errorTask); }
+            catch (IOException) { }
+            if (!cancellationToken.IsCancellationRequested && deadline.IsCancellationRequested)
+            {
+                throw new TimeoutException($"{backendName} 超时，已停止编码/解码进程。");
+            }
             throw;
         }
 

@@ -8,27 +8,31 @@ namespace HdrImageViewer.Tests;
 /// HDR color correctness gate for the in-process libjxl decoder: the RGBA16
 /// pixels produced by <see cref="JxlNativeDecoder"/> must be byte-identical to
 /// the djxl.exe --bits_per_sample 16 PPM16 path it replaces, for every PQ/HLG
-/// JPEG XL fixture under the repo's local test/ directory. The test silently
-/// passes when the local-only fixtures or bundled libjxl binaries are absent
+/// JPEG XL fixture under the repo's local test/ directory. The test reports a skip when the local-only fixtures or bundled libjxl binaries are absent
 /// (fresh checkouts / CI without the external/ toolchain).
 /// </summary>
 public sealed class JxlNativeDecoderParityTests
 {
-    [Fact]
+    public sealed class JxlFactAttribute : FactAttribute
+    {
+        public JxlFactAttribute()
+        {
+            if (Environment.GetEnvironmentVariable("HDRVIEWER_REQUIRE_NATIVE_TESTS") != "1")
+                Skip = MissingDependency();
+        }
+    }
+
+    private static string? MissingDependency() =>
+        !RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "Requires Windows." :
+        FindJxlFixtures().Count == 0 || FindTool("djxl.exe") is null || FindTool("jxl.dll") is null
+            ? "Requires HDR JXL fixtures, djxl.exe and jxl.dll." : null;
+
+    [JxlFact]
     public async Task InProcessDecodeMatchesDjxlPpm16ForHdrFixtures()
     {
-        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-        {
-            return;
-        }
-
+        Assert.Null(MissingDependency());
         var fixtures = FindJxlFixtures();
-        var djxl = FindTool("djxl.exe");
-        var jxlDll = FindTool("jxl.dll");
-        if (fixtures.Count == 0 || djxl is null || jxlDll is null)
-        {
-            return;
-        }
+        var djxl = FindTool("djxl.exe")!;
 
         foreach (var fixture in fixtures)
         {

@@ -71,7 +71,7 @@ public sealed partial class HomePage
         };
         picker.FileTypeChoices.Add($"{document.Format.DisplayName} 原始文件", [extension]);
 
-        var outputFile = await PickSaveStorageFileAsync(picker);
+        var outputFile = await PickSaveDestinationAsync(picker);
         if (outputFile is null)
         {
             return;
@@ -83,17 +83,25 @@ public sealed partial class HomePage
             return;
         }
 
+        var progressStarted = false;
         try
         {
-            var sourceFile = await StorageFile.GetFileFromPathAsync(document.Path);
-            CachedFileManager.DeferUpdates(outputFile);
-            await sourceFile.CopyAndReplaceAsync(outputFile);
-            await CachedFileManager.CompleteUpdatesAsync(outputFile);
+            progressStarted = await TryBeginExportProgressAsync("正在导出", "正在复制原始文件");
+            if (!progressStarted) return;
+            await ExportFileTransaction.CopyAsync(document.Path, outputFile.Path, ExportToken);
             ViewModel.UpdateRenderStatus($"{_renderer.LastRenderStatus}; 已另存为原始格式: {outputFile.Path}");
+        }
+        catch (OperationCanceledException)
+        {
+            ViewModel.UpdateRenderStatus("已取消导出，目标文件未更改。");
         }
         catch (Exception ex)
         {
             ViewModel.UpdateRenderStatus($"{_renderer.LastRenderStatus}; 另存为失败: {ex.GetType().Name}: {ex.Message}");
+        }
+        finally
+        {
+            if (progressStarted) EndExportProgress();
         }
     }
 

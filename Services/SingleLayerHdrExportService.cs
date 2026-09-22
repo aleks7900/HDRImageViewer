@@ -268,7 +268,7 @@ public static class SingleLayerHdrExportService
                 switch (extension)
                 {
                     case ".png":
-                        MoveReplacing(pngPath, candidateOutput);
+                        File.Move(pngPath, candidateOutput);
                         break;
                     case ".tif":
                     case ".tiff":
@@ -297,7 +297,7 @@ public static class SingleLayerHdrExportService
                 throw new InvalidOperationException($"{capability.Backend} 编码结束但没有生成有效文件。");
             }
 
-            MoveReplacing(candidateOutput, outputPath);
+            await ExportFileTransaction.CopyAsync(candidateOutput, outputPath, cancellationToken);
             var jxlNote = extension == ".jxl" && transfer == SingleLayerHdrExportTransfer.Pq
                 ? "; JXL PQ container intensity target is signaled by libjxl, commonly 10000 nits"
                 : string.Empty;
@@ -857,12 +857,6 @@ public static class SingleLayerHdrExportService
     {
         const string prefix = "found ";
         return details.StartsWith(prefix, StringComparison.Ordinal) ? details[prefix.Length..] : details;
-    }
-
-    private static void MoveReplacing(string source, string destination)
-    {
-        TryDeleteFile(destination);
-        File.Move(source, destination);
     }
 
     private static void TryDeleteFile(string path)

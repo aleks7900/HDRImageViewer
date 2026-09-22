@@ -194,7 +194,7 @@ public static class PhotoThumbnailService
         return source;
     }
 
-    private static byte[] ConvertHdrToBgra8(DecodedBitmap bitmap, CancellationToken cancellationToken)
+    internal static byte[] ConvertHdrToBgra8(DecodedBitmap bitmap, CancellationToken cancellationToken)
     {
         var result = new byte[checked(bitmap.PixelWidth * bitmap.PixelHeight * 4)];
         var destination = 0;
@@ -215,7 +215,7 @@ public static class PhotoThumbnailService
         return result;
     }
 
-    private static byte[] ConvertGainMapToBgra8(GainMapRenderInputs inputs, CancellationToken cancellationToken)
+    internal static byte[] ConvertGainMapToBgra8(GainMapRenderInputs inputs, CancellationToken cancellationToken)
     {
         var result = new byte[checked(inputs.Primary.PixelWidth * inputs.Primary.PixelHeight * 4)];
         var destination = 0;
@@ -236,7 +236,7 @@ public static class PhotoThumbnailService
         return result;
     }
 
-    private static byte[] ConvertSdrToBgra8(DecodedBitmap bitmap, CancellationToken cancellationToken)
+    internal static byte[] ConvertSdrToBgra8(DecodedBitmap bitmap, CancellationToken cancellationToken)
     {
         var result = new byte[checked(bitmap.PixelWidth * bitmap.PixelHeight * 4)];
         var destination = 0;

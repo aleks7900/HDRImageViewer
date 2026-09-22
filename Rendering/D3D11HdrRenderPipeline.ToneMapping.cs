@@ -51,6 +51,7 @@ public sealed partial class D3D11HdrRenderPipeline
             _toneMapAnalysisDirty = false;
         }
 
+        constants.ViewerTools = _viewerToolsConstants;
         constants.ToneMapInput = _cachedToneMapInput;
         constants.ToneMapOutput = _cachedToneMapOutput;
         constants.ViewModeParams = new Vector4((float)EffectiveViewModeForCurrentFrame, (float)_headroomMode, _referenceWhiteExposureScale, (float)_colorGamutMappingMode);
