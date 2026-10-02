@@ -12,12 +12,12 @@ public sealed class ViewerToolsTests
     {
         var pixels = new byte[4 * 8];
         for (var x = 0; x < 4; x++)
-        for (var c = 0; c < 3; c++)
-        {
-            var bits = BitConverter.HalfToUInt16Bits((Half)(x == 2 ? float.NaN : 1));
-            pixels[x * 8 + c * 2] = (byte)bits;
-            pixels[x * 8 + c * 2 + 1] = (byte)(bits >> 8);
-        }
+            for (var c = 0; c < 3; c++)
+            {
+                var bits = BitConverter.HalfToUInt16Bits((Half)(x == 2 ? float.NaN : 1));
+                pixels[x * 8 + c * 2] = (byte)bits;
+                pixels[x * 8 + c * 2 + 1] = (byte)(bits >> 8);
+            }
         var snapshot = new LuminanceSnapshot(4, 1, pixels, new Vector4(0.5f, 1, 0.25f, 0), 7);
         Assert.Equal(1, snapshot.Count);
         Assert.Equal(80, snapshot.AverageNits, 3);
@@ -59,12 +59,12 @@ public sealed class ViewerToolsTests
         var values = new[] { new Vector3(-0.5f, 1, 8), new Vector3(float.NaN, 2, 3) };
         var pixels = new byte[16];
         for (var i = 0; i < values.Length; i++)
-        for (var c = 0; c < 3; c++)
-        {
-            var bits = BitConverter.HalfToUInt16Bits((Half)values[i][c]);
-            pixels[i * 8 + c * 2] = (byte)bits;
-            pixels[i * 8 + c * 2 + 1] = (byte)(bits >> 8);
-        }
+            for (var c = 0; c < 3; c++)
+            {
+                var bits = BitConverter.HalfToUInt16Bits((Half)values[i][c]);
+                pixels[i * 8 + c * 2] = (byte)bits;
+                pixels[i * 8 + c * 2 + 1] = (byte)(bits >> 8);
+            }
         var snapshot = new LuminanceSnapshot(2, 1, pixels, new Vector4(1, 1, 0, 0), 1);
         Assert.Equal(1, snapshot.Count);
         Assert.Equal(1, snapshot.RedHistogram[0]);

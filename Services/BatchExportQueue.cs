@@ -18,8 +18,11 @@ public sealed class BatchExportItem(string sourcePath) : ObservableObject
     }
     public string StateLabel => State switch
     {
-        BatchExportState.Running => "导出中", BatchExportState.Completed => "已完成",
-        BatchExportState.Failed => "失败", BatchExportState.Canceled => "已取消", _ => "等待"
+        BatchExportState.Running => "导出中",
+        BatchExportState.Completed => "已完成",
+        BatchExportState.Failed => "失败",
+        BatchExportState.Canceled => "已取消",
+        _ => "等待"
     };
     public string Detail { get => _detail; internal set => SetProperty(ref _detail, value); }
 }

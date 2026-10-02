@@ -101,8 +101,12 @@ public sealed partial class HomePage
         var gridBrush = (Brush)Application.Current.Resources["DividerStrokeColorDefaultBrush"];
         void Label(string text, double x, double y)
         {
-            var label = new TextBlock { Text = text, Foreground = foreground,
-                Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"] };
+            var label = new TextBlock
+            {
+                Text = text,
+                Foreground = foreground,
+                Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"]
+            };
             Canvas.SetLeft(label, x); Canvas.SetTop(label, y); ChromaticityCanvas.Children.Add(label);
         }
         for (var tick = 0; tick <= 4; tick++)

@@ -16,9 +16,13 @@ internal static class BgraOrientation
             {
                 var (sx, sy) = orientation switch
                 {
-                    2 => (width - 1 - x, y), 3 => (width - 1 - x, height - 1 - y),
-                    4 => (x, height - 1 - y), 5 => (y, x), 6 => (y, height - 1 - x),
-                    7 => (width - 1 - y, height - 1 - x), _ => (width - 1 - y, x)
+                    2 => (width - 1 - x, y),
+                    3 => (width - 1 - x, height - 1 - y),
+                    4 => (x, height - 1 - y),
+                    5 => (y, x),
+                    6 => (y, height - 1 - x),
+                    7 => (width - 1 - y, height - 1 - x),
+                    _ => (width - 1 - y, x)
                 };
                 Buffer.BlockCopy(source, (sy * width + sx) * 4, output, (y * outputWidth + x) * 4, 4);
             }

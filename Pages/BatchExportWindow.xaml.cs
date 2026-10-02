@@ -45,9 +45,12 @@ public sealed partial class BatchExportWindow : Window
         try
         {
             var result = await new FolderPicker(AppWindow.Id).PickSingleFolderAsync();
-            if (result is not null) { _directory = result.Path; FolderText.Text = Path.GetFileName(result.Path.TrimEnd(Path.DirectorySeparatorChar));
+            if (result is not null)
+            {
+                _directory = result.Path; FolderText.Text = Path.GetFileName(result.Path.TrimEnd(Path.DirectorySeparatorChar));
                 Microsoft.UI.Xaml.Controls.ToolTipService.SetToolTip(FolderButton, result.Path);
-                UpdateSummary(); }
+                UpdateSummary();
+            }
         }
         catch (Exception ex) { SummaryText.Text = ex.Message; }
     }

@@ -965,7 +965,9 @@ public static class BitmapDecodeService
         {
             using var process = CreateNativeProcess(magick);
             process.StartInfo.ArgumentList.Add(inputPath);
-            process.StartInfo.ArgumentList.Add("-colorspace");
+            // EXR samples are already scene-linear; tag them without applying gamma.
+            process.StartInfo.ArgumentList.Add("-set");
+            process.StartInfo.ArgumentList.Add("colorspace");
             process.StartInfo.ArgumentList.Add("RGB");
             process.StartInfo.ArgumentList.Add("-define");
             process.StartInfo.ArgumentList.Add("quantum:format=floating-point");

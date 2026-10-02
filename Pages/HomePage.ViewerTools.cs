@@ -230,18 +230,34 @@ public sealed partial class HomePage
         var labelBrush = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"];
         var baseline = height - 1;
         // Shared SDR/HDR boundary, with one-stop grid lines in the HDR half.
-        var hdrShade = new Rectangle { Width = width / 2, Height = height,
-            Fill = (Brush)Application.Current.Resources["SubtleFillColorSecondaryBrush"] };
+        var hdrShade = new Rectangle
+        {
+            Width = width / 2,
+            Height = height,
+            Fill = (Brush)Application.Current.Resources["SubtleFillColorSecondaryBrush"]
+        };
         Canvas.SetLeft(hdrShade, width / 2);
         LuminanceHistogram.Children.Add(hdrShade);
         for (var stop = 1; stop < 6; stop++)
         {
             var x = width * (0.5 + stop / 12.0);
-            LuminanceHistogram.Children.Add(new Line { X1 = x, X2 = x, Y1 = 4, Y2 = baseline,
-                Stroke = gridBrush, StrokeThickness = 1, StrokeDashArray = new DoubleCollection { 4, 4 } });
+            LuminanceHistogram.Children.Add(new Line
+            {
+                X1 = x,
+                X2 = x,
+                Y1 = 4,
+                Y2 = baseline,
+                Stroke = gridBrush,
+                StrokeThickness = 1,
+                StrokeDashArray = new DoubleCollection { 4, 4 }
+            });
             if (stop % 2 != 0) continue;
-            var label = new TextBlock { Text = $"+{stop}", Foreground = labelBrush,
-                Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"] };
+            var label = new TextBlock
+            {
+                Text = $"+{stop}",
+                Foreground = labelBrush,
+                Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"]
+            };
             Canvas.SetLeft(label, x + 3); Canvas.SetTop(label, 0);
             LuminanceHistogram.Children.Add(label);
         }
@@ -260,17 +276,39 @@ public sealed partial class HomePage
                 var areaPoints = new PointCollection { new Point(points[0].X, baseline) };
                 foreach (var point in points) areaPoints.Add(point);
                 areaPoints.Add(new Point(points[^1].X, baseline));
-                LuminanceHistogram.Children.Add(new Polygon { Points = areaPoints,
-                    Fill = new SolidColorBrush(colors[channel]), Opacity = 0.08 });
-                LuminanceHistogram.Children.Add(new Polyline { Points = points,
-                    Stroke = new SolidColorBrush(colors[channel]), StrokeThickness = 1.25,
-                    StrokeLineJoin = PenLineJoin.Round });
+                LuminanceHistogram.Children.Add(new Polygon
+                {
+                    Points = areaPoints,
+                    Fill = new SolidColorBrush(colors[channel]),
+                    Opacity = 0.08
+                });
+                LuminanceHistogram.Children.Add(new Polyline
+                {
+                    Points = points,
+                    Stroke = new SolidColorBrush(colors[channel]),
+                    StrokeThickness = 1.25,
+                    StrokeLineJoin = PenLineJoin.Round
+                });
             }
         }
-        LuminanceHistogram.Children.Add(new Line { X1 = width / 2, X2 = width / 2, Y1 = 0, Y2 = height,
-            Stroke = labelBrush, StrokeThickness = 1 });
-        LuminanceHistogram.Children.Add(new Line { X1 = 0, X2 = width, Y1 = baseline, Y2 = baseline,
-            Stroke = labelBrush, StrokeThickness = 1 });
+        LuminanceHistogram.Children.Add(new Line
+        {
+            X1 = width / 2,
+            X2 = width / 2,
+            Y1 = 0,
+            Y2 = height,
+            Stroke = labelBrush,
+            StrokeThickness = 1
+        });
+        LuminanceHistogram.Children.Add(new Line
+        {
+            X1 = 0,
+            X2 = width,
+            Y1 = baseline,
+            Y2 = baseline,
+            Stroke = labelBrush,
+            StrokeThickness = 1
+        });
     }
 
     private void UpdatePixelSample(PointerRoutedEventArgs e)
