@@ -855,7 +855,7 @@ public static class BitmapDecodeService
         return ratio >= 1.75 ? 2 : 1;
     }
 
-    private static DecodedBitmap DownscalePreviewBitmapIfNeeded(
+    internal static DecodedBitmap DownscalePreviewBitmapIfNeeded(
         DecodedBitmap bitmap,
         int? maxPixelSize,
         CancellationToken cancellationToken)

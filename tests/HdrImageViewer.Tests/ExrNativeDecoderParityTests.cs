@@ -48,7 +48,7 @@ public sealed class ExrNativeDecoderParityTests
             Assert.Equal(width, decoded.PixelWidth);
             Assert.Equal(height, decoded.PixelHeight);
             Assert.Equal(DecodedBitmapPixelFormat.Rgba16Float, decoded.PixelFormat);
-            Assert.Equal(DecodedBitmapTransfer.LinearScRgb, decoded.Transfer);
+            Assert.Equal(DecodedBitmapTransfer.LinearSceneScRgb, decoded.Transfer);
             Assert.Equal(pixels, decoded.RgbaPixels);
         }
         finally

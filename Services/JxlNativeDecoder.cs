@@ -192,25 +192,26 @@ public static class JxlNativeDecoder
                 return;
             }
 
-            var jxlPath = NativeToolLocator.FindTool(JxlLibraryName)
+            var jxlPath = NativeToolLocator.FindFirstTool("libjxl.dll", JxlLibraryName)
                 ?? throw new DllNotFoundException($"未找到 {JxlLibraryName}（libjxl 解码库）。");
 
-            // Loading by absolute path first means the later DllImports on the
-            // bare module name bind to this already-loaded module, without
-            // registering a DllImportResolver (NativeExrDecoder already owns
-            // the single resolver slot for this assembly).
+            // Bind the imports to this handle even when the toolchain uses a
+            // different filename; EXR shares the assembly's resolver slot.
             var jxlHandle = LoadLibraryEx(jxlPath, IntPtr.Zero, LOAD_LIBRARY_SEARCH_DEFAULT_DIRS | LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR);
             if (jxlHandle == IntPtr.Zero)
             {
                 throw new DllNotFoundException($"加载 {jxlPath} 失败 (Win32 {Marshal.GetLastWin32Error()})，可能缺少依赖 DLL。");
             }
+            NativeCodecLibraryResolver.Register(JxlLibraryName, (_, _, _) => jxlHandle);
 
             // jxl_threads is optional: without it decoding still works, just
             // single-threaded.
-            var threadsPath = Path.Combine(Path.GetDirectoryName(jxlPath)!, JxlThreadsLibraryName);
+            var threadsFileName = Path.GetFileName(jxlPath).StartsWith("lib", StringComparison.OrdinalIgnoreCase)
+                ? "libjxl_threads.dll" : JxlThreadsLibraryName;
+            var threadsPath = Path.Combine(Path.GetDirectoryName(jxlPath)!, threadsFileName);
             if (!File.Exists(threadsPath))
             {
-                threadsPath = NativeToolLocator.FindTool(JxlThreadsLibraryName) ?? string.Empty;
+                threadsPath = string.Empty;
             }
 
             if (threadsPath.Length > 0)
@@ -220,6 +221,7 @@ public static class JxlNativeDecoder
                     && NativeLibrary.TryGetExport(threadsHandle, "JxlThreadParallelRunner", out var runnerFunction))
                 {
                     _threadParallelRunnerFunction = runnerFunction;
+                    NativeCodecLibraryResolver.Register(JxlThreadsLibraryName, (_, _, _) => threadsHandle);
                 }
             }
 

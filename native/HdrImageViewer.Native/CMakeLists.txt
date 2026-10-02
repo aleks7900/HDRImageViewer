@@ -22,7 +22,12 @@ endforeach()
 target_compile_features(HdrImageViewer.Native PRIVATE cxx_std_20)
 target_compile_definitions(HdrImageViewer.Native PRIVATE HDRIMAGEVIEWER_NATIVE_EXPORTS)
 
-find_package(OpenEXR CONFIG QUIET)
+option(HDRIMAGEVIEWER_REQUIRE_OPENEXR "Fail instead of building a stub when OpenEXR is missing" OFF)
+if(HDRIMAGEVIEWER_REQUIRE_OPENEXR)
+    find_package(OpenEXR 3.5 CONFIG REQUIRED)
+else()
+    find_package(OpenEXR CONFIG QUIET)
+endif()
 
 if(OpenEXR_FOUND)
     target_compile_definitions(HdrImageViewer.Native PRIVATE HDRIMAGEVIEWER_HAS_OPENEXR=1)

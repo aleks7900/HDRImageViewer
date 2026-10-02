@@ -158,8 +158,14 @@ public static class HeifGainMapDecoder
 
         var gamut = DetectPrimaryColorGamut(primaryHandle, document.HeifAvifProbe);
         var primaryTransfer = DetectPrimaryTransfer(primaryHandle, document.HeifAvifProbe);
-        var primary = DecodePrimaryWithWindowsImaging(document, gamut, maxPixelSize, cancellationToken);
+        var primary = DecodeHeifImageHandle(primaryHandle, "ISO tmap base", maxPixelSize) with
+        {
+            ColorGamut = gamut,
+            UsesBt2020Primaries = gamut == GainMapColorGamut.Bt2100,
+        };
+        primary = BitmapDecodeService.DownscalePreviewBitmapIfNeeded(primary, maxPixelSize, cancellationToken);
         var gainMap = DecodeHeifImageHandle(gainMapHandle, $"ISO tmap gain map item #{description.GainMapItemId}", maxPixelSize);
+        gainMap = BitmapDecodeService.DownscalePreviewBitmapIfNeeded(gainMap, maxPixelSize, cancellationToken);
         var constants = description.Metadata.CreateConstants(gamut, primaryTransfer);
 
         return new GainMapRenderInputs(primary, gainMap, constants);

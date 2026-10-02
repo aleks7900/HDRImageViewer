@@ -58,7 +58,7 @@ public sealed partial class BatchExportWindow : Window
         FormatNoteText.Text = FormatSelector.SelectedIndex switch
         {
             0 or 1 => "适合分享。HDR 将转换为 SDR。",
-            2 => "兼容 SDR 查看，同时保留 HDR 增益图。",
+            2 or 8 or 9 => "兼容 SDR 查看，同时保留 HDR 增益图。",
             3 => "16 位 PQ，BT.2020 色彩。",
             4 => "16 位 HLG，BT.2020 色彩。",
             5 or 6 => "保留线性浮点数据，适合后期处理。",

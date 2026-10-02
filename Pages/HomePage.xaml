@@ -717,7 +717,7 @@
                                 SelectionChanged="CropExportModeSelector_SelectionChanged">
                                 <ComboBoxItem Content="SDR 预览" />
                                 <ComboBoxItem Content="Gain-map 保真裁切" />
-                                <ComboBoxItem Content="转为 Ultra HDR" />
+                                <ComboBoxItem Content="转为 Gain Map HDR" />
                                 <ComboBoxItem Content="单层 HDR 转换" />
                             </ComboBox>
                             <ComboBox
@@ -748,12 +748,10 @@
                                 AutomationProperties.Name="Ultra HDR 基础色域"
                                 Width="128"
                                 SelectedIndex="0"
+                                IsEnabled="False"
                                 SelectionChanged="CropUltraHdrBaseGamutSelector_SelectionChanged"
                                 Visibility="Collapsed">
-                                <ComboBoxItem Content="Base Auto" />
-                                <ComboBoxItem Content="Base sRGB" />
-                                <ComboBoxItem Content="Base P3" />
-                                <ComboBoxItem Content="Base BT.2020" />
+                                <ComboBoxItem Content="Base P3 · 自动" />
                             </ComboBox>
                             <Button
                                 AutomationProperties.AutomationId="CancelCropButton"

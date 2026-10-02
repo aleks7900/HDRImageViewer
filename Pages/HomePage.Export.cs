@@ -282,7 +282,7 @@ public sealed partial class HomePage
             SuggestedStartLocation = PickerLocationId.PicturesLibrary,
             SuggestedFileName = CreateCropSuggestedFileName(_currentDocument, CropExportMode.GainMapPreserve),
         };
-        AddAvailableExportChoices(picker, HdrExportMode.GainMap);
+        AddAvailableExportChoices(picker, HdrExportMode.GainMap, jpegOnly: true);
 
         var outputFile = await PickSaveDestinationAsync(picker);
         if (outputFile is null)
@@ -334,7 +334,7 @@ public sealed partial class HomePage
 
         if (!CanExportGainMapHdr(_currentDocument))
         {
-            ViewModel.UpdateRenderStatus($"{_renderer.LastRenderStatus}; 转为 Ultra HDR 不可用: 当前文件没有可重建的 gain-map 或单层 HDR 数据。");
+            ViewModel.UpdateRenderStatus($"{_renderer.LastRenderStatus}; 转为 Gain Map HDR 不可用: 当前文件没有可重建的 gain-map 或单层 HDR 数据。");
             return;
         }
 
@@ -345,7 +345,7 @@ public sealed partial class HomePage
         if (availableChoices.Length == 0)
         {
             ViewModel.UpdateRenderStatus(
-                $"{_renderer.LastRenderStatus}; 转为 Ultra HDR 暂未接入可写后端: {sourceKind} 需要 libultrahdr/libavif/libheif 写出 gain-map metadata。裁切区域 {bounds.X},{bounds.Y} {bounds.Width}x{bounds.Height} 已计算；未弹保存框、未生成文件。{HdrExportBackendCatalog.BuildBackendSummary()}");
+                $"{_renderer.LastRenderStatus}; 转为 Gain Map HDR 暂未接入可写后端: {sourceKind} 需要 libultrahdr/libavif/libheif 写出 gain-map metadata。裁切区域 {bounds.X},{bounds.Y} {bounds.Width}x{bounds.Height} 已计算；未弹保存框、未生成文件。{HdrExportBackendCatalog.BuildBackendSummary()}");
             return;
         }
 
@@ -371,15 +371,15 @@ public sealed partial class HomePage
                 return;
             }
 
-            UpdateExportProgress($"正在编码 {DescribeUltraHdrGainMapChannelMode(SelectedUltraHdrGainMapChannelMode)} gain-map JPEG");
-            var exportSummary = await GainMapHdrExportService.ExportJpegUltraHdrAsync(
+            UpdateExportProgress($"正在编码 {DescribeUltraHdrGainMapChannelMode(SelectedUltraHdrGainMapChannelMode)} Gain Map");
+            var exportSummary = await GainMapHdrExportService.ExportAsync(
                 _currentDocument,
                 bounds,
                 outputFile.Path,
                 new UltraHdrExportOptions(SelectedUltraHdrGainMapChannelMode, SelectedUltraHdrSdrBaseColorGamut),
                 ExportToken);
             SetCropMode(false);
-            ViewModel.UpdateRenderStatus($"{_renderer.LastRenderStatus}; 已转为 Ultra HDR: {outputFile.Path}; {exportSummary}");
+            ViewModel.UpdateRenderStatus($"{_renderer.LastRenderStatus}; 已转为 Gain Map HDR: {outputFile.Path}; {exportSummary}");
         }
         catch (OperationCanceledException)
         {
@@ -387,7 +387,7 @@ public sealed partial class HomePage
         }
         catch (Exception ex)
         {
-            ViewModel.UpdateRenderStatus($"{_renderer.LastRenderStatus}; 转为 Ultra HDR 失败: {ex.GetType().Name}: {ex.Message}");
+            ViewModel.UpdateRenderStatus($"{_renderer.LastRenderStatus}; 转为 Gain Map HDR 失败: {ex.GetType().Name}: {ex.Message}");
         }
         finally
         {
@@ -580,10 +580,8 @@ public sealed partial class HomePage
             HorizontalAlignment = HorizontalAlignment.Stretch,
             SelectedIndex = 0,
         };
-        ultraHdrBaseGamutSelector.Items.Add(new ComboBoxItem { Content = "自动匹配源" });
-        ultraHdrBaseGamutSelector.Items.Add(new ComboBoxItem { Content = "BT.709 / sRGB" });
-        ultraHdrBaseGamutSelector.Items.Add(new ComboBoxItem { Content = "Display P3" });
-        ultraHdrBaseGamutSelector.Items.Add(new ComboBoxItem { Content = "BT.2020 / Rec.2100" });
+        ultraHdrBaseGamutSelector.Items.Add(new ComboBoxItem { Content = "Display P3（自动色调映射）" });
+        ultraHdrBaseGamutSelector.IsEnabled = false;
 
         modeSelector.SelectionChanged += (_, _) =>
         {
@@ -716,7 +714,7 @@ public sealed partial class HomePage
             SuggestedStartLocation = PickerLocationId.PicturesLibrary,
             SuggestedFileName = CreateSaveAsSuggestedFileName(document, GetSaveAsSuffix(mode)),
         };
-        AddAvailableExportChoices(picker, exportMode);
+        AddAvailableExportChoices(picker, exportMode, jpegOnly: mode == SaveAsExportMode.GainMapPreserve);
 
         var outputFile = await PickSaveDestinationAsync(picker);
         if (outputFile is null)
@@ -766,8 +764,8 @@ public sealed partial class HomePage
             }
             else
             {
-                UpdateExportProgress($"正在编码 {DescribeUltraHdrGainMapChannelMode(options.UltraHdrGainMapChannelMode)} gain-map JPEG");
-                exportSummary = await GainMapHdrExportService.ExportJpegUltraHdrAsync(
+                UpdateExportProgress($"正在编码 {DescribeUltraHdrGainMapChannelMode(options.UltraHdrGainMapChannelMode)} Gain Map");
+                exportSummary = await GainMapHdrExportService.ExportAsync(
                     document,
                     outputFile.Path,
                     new UltraHdrExportOptions(options.UltraHdrGainMapChannelMode, options.UltraHdrSdrBaseColorGamut),
@@ -802,7 +800,7 @@ public sealed partial class HomePage
     {
         return mode switch
         {
-            SaveAsExportMode.UltraHdrConvert => "转为 Ultra HDR / gain-map JPEG",
+            SaveAsExportMode.UltraHdrConvert => "转为 Gain Map HDR",
             SaveAsExportMode.GainMapPreserve => "Gain-map 保真另存为",
             _ => "单层 HDR",
         };
@@ -854,10 +852,10 @@ public sealed partial class HomePage
                 : _renderer.DisplayConfiguration.MaxSceneValue;
     }
 
-    private static void AddAvailableExportChoices(FileSavePicker picker, HdrExportMode mode)
+    private static void AddAvailableExportChoices(FileSavePicker picker, HdrExportMode mode, bool jpegOnly = false)
     {
         var choices = HdrExportBackendCatalog.GetChoices(mode)
-            .Where(choice => choice.IsAvailable)
+            .Where(choice => choice.IsAvailable && (!jpegOnly || choice.Extension == ".jpg"))
             .ToArray();
         foreach (var choice in choices)
         {
@@ -883,7 +881,7 @@ public sealed partial class HomePage
         return SelectedCropExportMode switch
         {
             CropExportMode.GainMapPreserve => "导出模式: Gain-map 保真裁切，裁切 base/gainmap 并保留原映射参数",
-            CropExportMode.UltraHdrConvert => $"导出模式: 转为 Ultra HDR，从重建 HDR 重新生成 SDR base、{DescribeUltraHdrGainMapChannelMode(SelectedUltraHdrGainMapChannelMode)} gainmap 和 metadata",
+            CropExportMode.UltraHdrConvert => $"导出模式: 转为 Gain Map HDR，从重建 HDR 重新生成 SDR base、{DescribeUltraHdrGainMapChannelMode(SelectedUltraHdrGainMapChannelMode)} gainmap 和 metadata",
             CropExportMode.SingleLayerHdr => $"导出模式: 单层 HDR 转换，目标 {DescribeCropHdrTransfer(SelectedCropHdrTransfer)}；JXR 写出 scRGB，JXL/AVIF/HEIF metadata 会写入对应 transfer",
             _ => "导出模式: SDR 预览，使用系统 BitmapEncoder 输出 sRGB 裁切图",
         };
@@ -906,9 +904,8 @@ public sealed partial class HomePage
 
     private static bool CanExportGainMapHdr(HdrImageDocument document)
     {
-        return document.GainMapProbe?.IsRenderableUltraHdr == true
+        return document.HasRenderableGainMap
             || document.HeifAvifProbe?.HasHdrTransfer == true
-            || document.HeifAvifProbe?.HasGainMapAuxiliary == true
             || document.Format.Kind is HdrImageKind.SingleLayerHdr;
     }
 
@@ -926,7 +923,7 @@ public sealed partial class HomePage
 
         if (document.HeifAvifProbe?.HasHdrTransfer == true || document.Format.Kind is HdrImageKind.SingleLayerHdr)
         {
-            return "single-layer HDR source reconstructed to JPEG Ultra HDR";
+            return "single-layer HDR source reconstructed to Gain Map HDR";
         }
 
         return document.Format.DisplayName;

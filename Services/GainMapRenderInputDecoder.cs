@@ -25,9 +25,7 @@ internal static class GainMapRenderInputDecoder
         if (document.HeifAvifProbe is { IsHeifFamily: true } heifProbe
             && (heifProbe.HasGainMapAuxiliary || heifProbe.HasIsoGainMapSignal))
         {
-            return IsAvif(document.Path) && heifProbe.HasIsoGainMapSignal && !heifProbe.HasGainMapAuxiliary
-                ? AvifGainMapDecoder.DecodeRenderInputsAsync(document, maxPixelSize, cancellationToken)
-                : HeifGainMapDecoder.DecodeRenderInputsAsync(document, maxPixelSize, cancellationToken);
+            return HeifGainMapDecoder.DecodeRenderInputsAsync(document, maxPixelSize, cancellationToken);
         }
 
         if (document.JxlProbe is { IsJxl: true, HasGainMapBox: true })
@@ -43,10 +41,5 @@ internal static class GainMapRenderInputDecoder
         CancellationToken cancellationToken)
     {
         return DecodeRenderInputsAsync(document, maxPixelSize: null, cancellationToken);
-    }
-
-    private static bool IsAvif(string path)
-    {
-        return string.Equals(Path.GetExtension(path), ".avif", StringComparison.OrdinalIgnoreCase);
     }
 }

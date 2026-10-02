@@ -26,22 +26,13 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
-      - name: Cache vcpkg binaries
-        uses: actions/cache@v4
-        with:
-          path: ${{ runner.temp }}\vcpkg-binary-cache
-          key: vcpkg-${{ runner.os }}-openexr-${{ hashFiles('native/HdrImageViewer.Native/CMakeLists.txt') }}
-          restore-keys: |
-            vcpkg-${{ runner.os }}-openexr-
+      - name: Build pinned codecs and OpenEXR bridge (x64)
+        uses: ./.github/actions/build-codecs
 
       - name: Build portable zip
         id: portable
         shell: pwsh
-        env:
-          VCPKG_DEFAULT_BINARY_CACHE: ${{ runner.temp }}\vcpkg-binary-cache
         run: |
-          New-Item -ItemType Directory -Force $env:VCPKG_DEFAULT_BINARY_CACHE | Out-Null
-
           $version = '${{ github.event.inputs.version }}'
           if ([string]::IsNullOrWhiteSpace($version)) {
               $version = '${{ github.ref_name }}'
@@ -50,7 +41,7 @@ jobs:
               }
           }
 
-          .\eng\publish-portable.ps1 -Version $version -Platform x64
+          .\eng\publish-portable.ps1 -Version $version -Platform x64 -SkipNative
 
       - name: Publish GitHub Release
         shell: pwsh
@@ -128,23 +119,11 @@ jobs:
           }
           $notes += @(
               "",
-              "## Optional Format Tools",
+              "## Bundled Format Tools",
               "",
-              "Most common formats work out of the box. JPEG XL preview and some HDR export formats use external command-line tools when they are available.",
+              "The x64 portable build includes the pinned JPEG XL, AVIF, HEIC, OpenEXR and Ultra HDR codecs and command-line tools. No separate MSYS2 installation is required for these formats.",
               "",
-              "Install optional tools with MSYS2 UCRT64:",
-              "",
-              '```powershell',
-              "winget install --id MSYS2.MSYS2 --source winget",
-              "C:\msys64\usr\bin\pacman.exe -Syu --noconfirm",
-              "C:\msys64\usr\bin\pacman.exe -S --needed --noconfirm mingw-w64-ucrt-x86_64-libjxl mingw-w64-ucrt-x86_64-libavif mingw-w64-ucrt-x86_64-libheif",
-              '```',
-              "",
-              "Restart HDR Image Viewer after installing. The app auto-detects tools in ``C:\msys64\ucrt64\bin`` and also checks ``PATH``.",
-              "",
-              "- JPEG XL preview: ``jxlinfo.exe`` and ``djxl.exe`` from libjxl.",
-              "- JPEG XL / AVIF / HEIC HDR export: ``cjxl.exe``, ``avifenc.exe``, and ``heif-enc.exe`` when installed.",
-              "- Ultra HDR JPEG export: advanced users can place ``ultrahdr_app.exe`` on ``PATH``."
+              "JPEG Ultra HDR and HEIC / AVIF ISO Gain Map exports support monochrome and RGB gain maps. Codec versions and source checksums are recorded in ``eng/codecs.lock.json``."
           )
           $notesPath = Join-Path $env:RUNNER_TEMP 'release-notes.md'
           $notes | Set-Content -Path $notesPath -Encoding utf8

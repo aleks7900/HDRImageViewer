@@ -24,7 +24,7 @@ public static class HdrExportBackendCatalog
 
     public static string BuildBackendSummary()
     {
-        return "Native backends: libultrahdr for Ultra HDR JPEG, Windows WIC for JPEG XR HDR, HdrImageViewer.Native/OpenEXR for EXR, libjxl/cjxl for JPEG XL HDR, libavif/avifenc for AVIF HDR, libheif/heif-enc for HEIF/HEIC HDR.";
+        return "Native backends: libultrahdr for JPEG/HEIC/AVIF Gain Map, Windows WIC for JPEG XR HDR, HdrImageViewer.Native/OpenEXR for EXR, libjxl/cjxl for JPEG XL HDR, libavif/avifenc for AVIF HDR, libheif/heif-enc for HEIF/HEIC HDR.";
     }
 
     private static IReadOnlyList<HdrExportFormatChoice> GetGainMapChoices()
@@ -39,17 +39,17 @@ public static class HdrExportBackendCatalog
                 ultraHdr.CanWriteJpegUltraHdr,
                 ultraHdr.Details),
             new HdrExportFormatChoice(
-                "AVIF gain-map",
+                "AVIF Gain Map",
                 ".avif",
-                "libavif planned",
-                false,
-                "libavif 已有 gain-map 方向能力，需接 native backend。"),
+                ultraHdr.Backend,
+                ultraHdr.CanWriteHeifGainMap,
+                "ISO 21496-1 Gain Map"),
             new HdrExportFormatChoice(
-                "HEIF/HEIC gain-map",
+                "HEIC Gain Map",
                 ".heic",
-                "libheif planned",
-                false,
-                "仅在接入 libheif 并验证 Apple/ISO gain-map item 写入后启用。"),
+                ultraHdr.Backend,
+                ultraHdr.CanWriteHeifGainMap,
+                "ISO 21496-1 Gain Map"),
         ];
     }
 

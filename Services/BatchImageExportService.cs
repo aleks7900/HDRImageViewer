@@ -4,7 +4,9 @@ public static class BatchImageExportService
 {
     public static async Task<string> ExportAsync(BatchExportItem item, string directory, int format, CancellationToken token)
     {
-        var extension = format switch { 1 or 2 => ".jpg", 5 => ".tif", 6 => ".exr", 7 => Path.GetExtension(item.SourcePath), _ => ".png" };
+        ArgumentOutOfRangeException.ThrowIfNegative(format);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(format, 9);
+        var extension = format switch { 1 or 2 => ".jpg", 5 => ".tif", 6 => ".exr", 7 => Path.GetExtension(item.SourcePath), 8 => ".heic", 9 => ".avif", _ => ".png" };
         var output = BatchExportController.ChooseOutputPath(directory, item.SourcePath, extension);
         if (format == 7)
         {
@@ -18,7 +20,7 @@ public static class BatchImageExportService
         {
             var load = await ImageDocumentLoader.LoadAsync(item.SourcePath, token);
             if (format <= 1) await SdrImageExportService.ExportAsync(load.Document, candidate, format == 1, token);
-            else if (format == 2) await GainMapHdrExportService.ExportJpegUltraHdrAsync(load.Document, candidate, token);
+            else if (format is 2 or 8 or 9) await GainMapHdrExportService.ExportAsync(load.Document, candidate, cancellationToken: token);
             else await SingleLayerHdrExportService.ExportAsync(load.Document, candidate,
                 format == 4 ? SingleLayerHdrExportTransfer.Hlg : SingleLayerHdrExportTransfer.Pq, token);
             await ExportFileTransaction.CopyAsync(candidate, output, token, overwrite: false);

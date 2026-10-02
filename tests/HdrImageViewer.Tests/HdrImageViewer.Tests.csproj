@@ -27,6 +27,14 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Include="..\..\external\encoders\x64\**\*.*"
+          Link="encoders\x64\%(RecursiveDir)%(Filename)%(Extension)"
+          CopyToOutputDirectory="Always" />
+    <None Include="..\..\native\HdrImageViewer.Native\build\x64\Release\*.dll"
+          Link="%(Filename)%(Extension)" CopyToOutputDirectory="Always" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Compile Include="..\..\Services\ExportFileTransaction.cs" Link="ExportFileTransaction.cs" />
     <Compile Include="..\..\Rendering\ChromaticityDiagram.cs" Link="ChromaticityDiagram.cs" />
     <EmbeddedResource Include="..\..\Rendering\Data\CIE_xyz_1931_2deg.csv" LogicalName="HdrImageViewer.CIE1931" />
@@ -71,6 +79,7 @@
              Link="JxlNativeDecoder.cs" />
     <Compile Include="..\..\Services\NativeExrDecoder.cs"
              Link="NativeExrDecoder.cs" />
+    <Compile Include="..\..\Services\NativeCodecLibraryResolver.cs" Link="NativeCodecLibraryResolver.cs" />
     <Compile Include="..\..\Services\JxlProbe.cs"
              Link="JxlProbe.cs" />
     <Compile Include="..\..\Services\NativeToolLocator.cs"

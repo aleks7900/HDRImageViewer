@@ -1,0 +1,27 @@
+name: Build pinned codecs
+description: Restore checksum-pinned codec packages and build Ultra HDR and the EXR bridge
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.14'
+    - uses: msys2/setup-msys2@v2
+      id: msys
+      with:
+        msystem: UCRT64
+        update: true
+        install: >-
+          mingw-w64-ucrt-x86_64-gcc
+          mingw-w64-ucrt-x86_64-cmake
+          mingw-w64-ucrt-x86_64-ninja
+    - uses: actions/cache@v4
+      with:
+        path: external/_deps/codec-upgrade/downloads
+        key: codecs-${{ runner.os }}-${{ hashFiles('eng/codecs.lock.json') }}
+    - shell: pwsh
+      env:
+        HDRIV_MSYS2_ROOT: ${{ steps.msys.outputs.msys2-location }}
+      run: |
+        "HDRIV_MSYS2_ROOT=$env:HDRIV_MSYS2_ROOT" >> $env:GITHUB_ENV
+        .\eng\build-native.ps1 -Platforms x64 -Configuration Release

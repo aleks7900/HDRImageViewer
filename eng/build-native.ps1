@@ -10,6 +10,17 @@ $ErrorActionPreference = 'Stop'
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $nativeRoot = Join-Path $repo 'native\HdrImageViewer.Native'
 
+# Release builds use the same pinned codec stack as the shipped CLI bundle.
+# An explicit VcpkgRoot retains the legacy developer build path.
+if ([string]::IsNullOrWhiteSpace($VcpkgRoot) -and $Configuration -eq 'Release') {
+    $msysRoot = if ($env:HDRIV_MSYS2_ROOT) { $env:HDRIV_MSYS2_ROOT } else { 'C:\msys64' }
+    & python (Join-Path $PSScriptRoot 'build-codecs.py') --msys $msysRoot --apply
+    if ($LASTEXITCODE -ne 0) { throw "Pinned codec build failed (exit $LASTEXITCODE)" }
+    & (Join-Path $PSScriptRoot 'verify-codecs.ps1')
+    if ($LASTEXITCODE -ne 0) { throw "Pinned codec verification failed (exit $LASTEXITCODE)" }
+    return
+}
+
 function Resolve-VcpkgRoot {
     param([string]$ExplicitRoot)
 

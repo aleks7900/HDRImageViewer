@@ -61,6 +61,7 @@
                             <ComboBoxItem Content="JPEG · Ultra HDR" /><ComboBoxItem Content="PNG · HDR PQ" />
                             <ComboBoxItem Content="PNG · HDR HLG" /><ComboBoxItem Content="TIFF · 浮点 HDR" />
                             <ComboBoxItem Content="OpenEXR" /><ComboBoxItem Content="保留原格式" />
+                            <ComboBoxItem Content="HEIC · Gain Map" /><ComboBoxItem Content="AVIF · Gain Map" />
                         </ComboBox>
                         <TextBlock x:Name="FormatNoteText" Text="适合分享。HDR 将转换为 SDR。" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Style="{StaticResource CaptionTextBlockStyle}" />
                         <StackPanel Spacing="8">

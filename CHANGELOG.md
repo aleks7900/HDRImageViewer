@@ -1,6 +1,12 @@
 # Changelog
 
-## Unreleased
+## 1.0.33.0 - 2026-10-02
+
+- Added HEIC / AVIF ISO Gain Map export for single images, crops, and batch queues, with monochrome/RGB maps and verified HDR readback.
+- Fixed odd-dimension ISO Gain Map decoding and sRGB transfer tagging; automatic SDR bases are now correctly labeled Display P3.
+- Updated the pinned x64 codec stack to libultrahdr 2.0.2, libjxl 0.12.0, libavif 1.4.2, libheif 1.23.5, libde265 1.1.3 and OpenEXR 3.5.1, with updated supporting libraries and x265 4.3 multilib. Ultra HDR retains JPEG output with both XMP and ISO metadata.
+- Added checksum-verified codec restoration/build scripts, runtime dependency manifests and rollback backups. CI and release builds use the same codec lock. Native runtime copies no longer keep older executables simply because their file timestamps are newer.
+- Shared the assembly's native resolver between EXR and JPEG XL, supporting both MSVC and MinGW JPEG XL DLL names. Added application-level PQ/HLG export/decode and monochrome/RGB Ultra HDR round-trip checks.
 
 ## 1.0.32.0 - 2026-09-23
 

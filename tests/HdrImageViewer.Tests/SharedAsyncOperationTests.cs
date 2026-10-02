@@ -32,23 +32,26 @@ public sealed class SharedAsyncOperationTests
     [Fact]
     public async Task WaitAsync_CancelsSharedWorkAfterLastWaiterLeaves()
     {
-        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var sharedCancellation = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var started = new TaskCompletionSource<CancellationToken>(TaskCreationOptions.RunContinuationsAsynchronously);
         using var operation = new SharedAsyncOperation<int>(async token =>
         {
-            using var registration = token.Register(() => sharedCancellation.TrySetResult());
-            started.TrySetResult();
+            started.TrySetResult(token);
             await Task.Delay(Timeout.InfiniteTimeSpan, token);
             return 0;
         });
         using var waiterCancellation = new CancellationTokenSource();
 
         var waiter = operation.WaitAsync(waiterCancellation.Token);
-        await started.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        var sharedToken = await started.Task.WaitAsync(TimeSpan.FromSeconds(2));
         waiterCancellation.Cancel();
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => waiter);
-        await sharedCancellation.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        // Observe cancellation directly: the operation can dispose a token registration
+        // before its callback runs when the canceled delay resumes.
+        Assert.True(sharedToken.IsCancellationRequested);
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            operation.Completion.WaitAsync(TimeSpan.FromSeconds(2)));
+        Assert.True(operation.Completion.IsCanceled);
         Assert.True(operation.IsAbandoned);
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => operation.WaitAsync());
     }

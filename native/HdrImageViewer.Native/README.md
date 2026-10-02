@@ -4,7 +4,7 @@ Native bridge for format decoders that are awkward to call directly from C#.
 
 The first target is OpenEXR. The C# app calls a small C ABI exported by
 `HdrImageViewer.Native.dll` and receives RGBA half-float pixels that can be
-wrapped as `DecodedBitmapPixelFormat.Rgba16Float` with `LinearScRgb` transfer.
+wrapped as `DecodedBitmapPixelFormat.Rgba16Float` with `LinearSceneScRgb` transfer.
 
 Current local x64 Release output is expected at
 `native/HdrImageViewer.Native/build/x64/Release`. The managed app copies
@@ -24,7 +24,9 @@ From the repo root, `eng/build-native.ps1 -Platforms x64 -Configuration Release`
 uses the same output layout. `eng/verify-codecs.ps1` also checks the expected
 x64 native bridge runtime files alongside bundled codecs.
 
-If OpenEXR is not found, the project builds a stub DLL that reports EXR decode
+The pinned Release build requires OpenEXR 3.5 and fails if it is missing. See
+`docs/CODEC_UPGRADE_2026-10.md` for restoration. For manual developer builds,
+if OpenEXR is not found and `HDRIMAGEVIEWER_REQUIRE_OPENEXR` is OFF, the project builds a stub DLL that reports EXR decode
 as unavailable. This is intentional so the managed app can keep compiling while
 the native dependency is being prepared.
 

@@ -18,7 +18,7 @@ public static class NativeExrDecoder
 
     static NativeExrDecoder()
     {
-        NativeLibrary.SetDllImportResolver(typeof(NativeExrDecoder).Assembly, ResolveNativeLibrary);
+        NativeCodecLibraryResolver.Register(NativeLibraryName, ResolveNativeLibrary);
     }
 
     public static bool IsAvailable => TryLoadNativeLibrary(out _);

@@ -10,8 +10,8 @@ This document is the current format, codec, native-tool, and HDR metadata refere
 | PNG | Supported | SDR/high-bit-depth/HDR metadata candidates | SDR and 16-bit HDR PNG | HDR PNG export writes PNG cICP HLG/PQ BT.2020 metadata. |
 | TIFF / TIF | Supported | SDR/high-bit-depth/float candidates | SDR and float HDR TIFF | Float HDR TIFF export writes uncompressed 32-bit IEEE float RGB in linear scRGB/BT.709. |
 | JPEG XR / WDP / HDP | Supported | WIC FP16/scRGB first, then WinRT RGBA16/RGBA8 preview fallback | Not a primary export target | Kept for opening/preview. Diagnostics report the actual JPEG XR decode path and fallback reason when WIC FP16/scRGB conversion is unavailable. |
-| HEIF / HEIC | Partial | Single-layer PQ/HLG and HEIF-family gain map supported | HEIC HDR via `heif-enc.exe` | Single-layer HDR prefers LibHeifSharp; gain-map primary/base uses Windows Imaging and auxiliary/tmap gain maps use LibHeifSharp. |
-| AVIF | Partial | Single-layer PQ/HLG and ISO gain map supported | AVIF HDR via `avifenc.exe` | Single-layer HDR uses LibHeifSharp/native fallback; gain-map AVIF uses `avifgainmaputil.exe` to extract the gain-map image and ISO metadata. |
+| HEIF / HEIC | Partial | Single-layer PQ/HLG and HEIF-family gain map supported | HEIC HDR via `heif-enc.exe`; HEIC Gain Map via `ultrahdr_app.exe` | Single-layer HDR prefers LibHeifSharp; ISO tmap base/gain maps use LibHeifSharp; Apple auxiliary base uses Windows Imaging. |
+| AVIF | Partial | Single-layer PQ/HLG and ISO gain map supported | AVIF HDR via `avifenc.exe`; AVIF Gain Map via `ultrahdr_app.exe` | Single-layer HDR uses LibHeifSharp/native fallback; ISO tmap base/gain maps use LibHeifSharp and the ISO metadata reader. |
 | JPEG XL / JXL | Requires `jxlinfo.exe` / `djxl.exe` | PQ/HLG/linear metadata and jhgm gain maps routed to renderer | JXL HDR via `cjxl.exe` | Current x64 bundled tools are in `external\encoders\x64`. |
 | OpenEXR / EXR | Supported when native bridge is present | Scene-linear half/float RGBA16F | EXR via native bridge | Uses `HdrImageViewer.Native` + OpenEXR runtime DLLs. |
 | Radiance HDR / RGBE | Planned | Planned | Not supported | File association is reserved, decoder not complete. |
@@ -34,41 +34,20 @@ These command-line tools are launched as external processes. When a user install
 
 ## Bundled x64 Tool Set
 
-Current local x64 bundled encoder source:
-
-```text
-external\encoders\x64
-```
-
-Verified command-line versions:
-
-- `cjxl.exe --version`: `cjxl v0.11.2`.
-- `avifgainmaputil.exe help`: `libavif 1.4.1` with dav1d/aom/rav1e/svt backends.
-- `avifenc.exe --version`: `libavif 1.4.1`, `aom v3.13.3`.
-- `heif-enc.exe --version`: `libheif 1.22.2`.
-- `heif-enc.exe --list-encoders`: lists `x265` for HEIC and `aom` for AVIF.
-
-`avifgainmaputil.exe` and its MSYS2 DLL set live under `external\encoders\x64\avifgainmaputil` to avoid mixing its `libavif-16.dll` / `libyuv.dll` ABI with the root AVIF/HEIF tool set.
-
-The current bundled x64 directory is about `55.52 MB` uncompressed before the AVIF gain-map subdirectory. `libx265.dll` is the largest root file at about `16.28 MB`.
-
-Run this from the repo root to verify the bundled tools and native bridge:
+The pinned bundle in `external/encoders/x64` contains libultrahdr 2.0.2,
+libjxl 0.12.0, libavif 1.4.2 (including avifgainmaputil), libheif 1.23.5,
+libde265 1.1.3 and x265 4.3 multilib. The native bridge uses OpenEXR 3.5.1.
+The AVIF gain-map CLI now shares the root UCRT64 runtime instead of a separate
+subdirectory. The application still supports tool subdirectories for existing installations.
 
 ```powershell
-.\eng\verify-codecs.ps1
+python eng/build-codecs.py --apply
+./eng/verify-codecs.ps1
 ```
 
-If `ultrahdr_app.exe` is missing but a local libultrahdr build exists:
-
-```powershell
-.\eng\verify-codecs.ps1 -RepairUltraHdr
-```
-
-That repair path copies from:
-
-```text
-external\_deps\libultrahdr\build\Release\ultrahdr_app.exe
-```
+See [the codec upgrade notes](CODEC_UPGRADE_2026-10.md) for build prerequisites,
+exact version locks, runtime checksums, backup/restore behavior and integration tests.
+Do not copy a lone CLI from an older build into this bundle; its DLL ABI may differ.
 
 ## HEIF / AVIF Decode
 
@@ -94,7 +73,7 @@ Current implementation:
 - `HeifGainMapDecoder` uses Windows Imaging for the primary/base image to avoid known corrupted primary HEVC output on local libheif/libde265 paths.
 - HEIF auxiliary gain-map items and XMP metadata are extracted through LibHeifSharp.
 - HEIF ISO tmap files parse the BMFF item graph, locate the derived base+gain-map relationship, parse binary ISO 21496 metadata, and decode the referenced grid gain-map item through LibHeifSharp.
-- AVIF ISO gain-map files use `avifgainmaputil.exe` to extract the gain-map image and print binary-derived metadata.
+- AVIF ISO gain-map files use the same native tmap reader/decoder as HEIC; `avifgainmaputil.exe` remains available as a standalone tool.
 - JPEG XL `jhgm` files parse the box bundle, read ISO 21496 metadata, extract the embedded naked JXL gain-map codestream, and decode that codestream through `djxl.exe`.
 - `D3D11HdrRenderPipeline` reconstructs the HDR frame in the same gain-map shader architecture used by JPEG gain-map files.
 - The custom reference-white override also applies to gain-map HDR. Standard Adobe/ISO gain maps default to a 203-nit content reference; Apple HDRGainMap defaults to the current display SDR white, and the slider can override that reconstructed HDR brightness anchor.
@@ -149,7 +128,7 @@ For native CLI encoders, `SingleLayerHdrExportService` writes a temporary 16-bit
 
 ## Ultra HDR / Gain-Map Export
 
-JPEG Ultra HDR / gain-map export uses `ultrahdr_app.exe` discovered through `NativeToolLocator`, normally from `encoders\<arch>` or `external\encoders\<arch>`.
+JPEG Ultra HDR and HEIC/AVIF ISO Gain Map export use `ultrahdr_app.exe` discovered through `NativeToolLocator`, normally from `encoders\<arch>` or `external\encoders\<arch>`.
 
 Recommended libultrahdr build flags:
 

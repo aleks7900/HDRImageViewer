@@ -92,8 +92,12 @@ public static class HeifAvifProbe
         var hasIsoGainMapSignal =
             context.CompatibleBrands.Any(value => string.Equals(value, "tmap", StringComparison.OrdinalIgnoreCase))
             || context.ItemTypesById.Values.Any(value => string.Equals(value, "tmap", StringComparison.OrdinalIgnoreCase));
-        var transfer = color?.TransferCharacteristics;
-        var primaries = color?.ColorPrimaries;
+        // ICC may identify the gamut without an identifiable transfer function.
+        // Retain explicit NCLX fields instead of losing them behind that ICC box.
+        var nclx = associatedProperties.Select(property => property.Color)
+            .FirstOrDefault(candidate => candidate?.ProfileType == "nclx");
+        var transfer = color?.TransferCharacteristics ?? nclx?.TransferCharacteristics;
+        var primaries = color?.ColorPrimaries ?? nclx?.ColorPrimaries;
 
         return new HeifAvifProbeResult(
             isHeifFamily,
@@ -105,8 +109,8 @@ public static class HeifAvifProbe
             color?.ProfileType,
             primaries,
             transfer,
-            color?.MatrixCoefficients,
-            color?.FullRange,
+            color?.MatrixCoefficients ?? nclx?.MatrixCoefficients,
+            color?.FullRange ?? nclx?.FullRange,
             maxBitDepth,
             transfer is 16 or 18,
             primaries == 9,
