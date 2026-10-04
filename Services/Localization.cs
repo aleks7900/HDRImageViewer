@@ -8,8 +8,153 @@ namespace HdrImageViewer.Services;
 public static class Localization
 {
 #if WINDOWS
+    private static readonly object s_loaderLock = new();
     private static Microsoft.Windows.ApplicationModel.Resources.ResourceLoader? s_resourceLoader;
-    private static bool s_resourceLoaderFailed;
+    private static bool s_resourceLoaderInitializationFailed;
+#endif
+
+    public static string CurrentLanguage { get; private set; } = string.Empty;
+
+    /// <summary>
+    /// Applies a language preference override to the application.
+    /// If <paramref name="language"/> is null, empty, or whitespace, the Windows
+    /// PrimaryLanguageOverride is explicitly cleared (set to empty string),
+    /// restoring the Windows system/user default language.
+    /// </summary>
+    public static void ApplyLanguagePreference(string? language)
+    {
+        var overrideValue = string.IsNullOrWhiteSpace(language) ? string.Empty : language.Trim();
+
+#if WINDOWS
+        try
+        {
+            Windows.Globalization.ApplicationLanguages.PrimaryLanguageOverride = overrideValue;
+        }
+        catch
+        {
+            // Ignore if Windows.Globalization is unavailable in the current execution environment
+        }
+
+        ResetResourceLoader();
+#endif
+
+        CurrentLanguage = overrideValue;
+    }
+
+    /// <summary>
+    /// Gets the currently applied Windows primary language override.
+    /// Returns empty string if system default is active.
+    /// </summary>
+    public static string GetAppliedLanguageOverride()
+    {
+#if WINDOWS
+        try
+        {
+            return Windows.Globalization.ApplicationLanguages.PrimaryLanguageOverride;
+        }
+        catch
+        {
+            return CurrentLanguage;
+        }
+#else
+        return CurrentLanguage;
+#endif
+    }
+
+#if WINDOWS
+    /// <summary>
+    /// Resets any cached ResourceLoader instance so subsequent lookups recreate it
+    /// with the active ResourceContext and language settings.
+    /// </summary>
+    public static void ResetResourceLoader()
+    {
+        lock (s_loaderLock)
+        {
+            s_resourceLoader = null;
+            s_resourceLoaderInitializationFailed = false;
+        }
+    }
+
+#endif
+
+    /// <summary>
+    /// Normalizes a resource key for Windows MRT ResourceLoader.
+    /// Segmented WinUI x:Uid property keys (such as "InspectorTabDetails.Text")
+    /// are indexed in MRT PRI resources using slashes (e.g. "InspectorTabDetails/Text").
+    /// </summary>
+    public static string NormalizeKeyForMrt(string key)
+    {
+        if (string.IsNullOrEmpty(key))
+        {
+            return string.Empty;
+        }
+
+        var dotIndex = key.IndexOf('.');
+        if (dotIndex < 0)
+        {
+            return key;
+        }
+
+        return key.Replace('.', '/');
+    }
+
+#if WINDOWS
+    private static Microsoft.Windows.ApplicationModel.Resources.ResourceLoader? GetResourceLoader()
+    {
+        lock (s_loaderLock)
+        {
+            if (s_resourceLoaderInitializationFailed)
+            {
+                return null;
+            }
+
+            if (s_resourceLoader != null)
+            {
+                return s_resourceLoader;
+            }
+
+            try
+            {
+                s_resourceLoader = CreateResourceLoader();
+                return s_resourceLoader;
+            }
+            catch
+            {
+                s_resourceLoaderInitializationFailed = true;
+                return null;
+            }
+        }
+    }
+
+    private static Microsoft.Windows.ApplicationModel.Resources.ResourceLoader CreateResourceLoader()
+    {
+        try
+        {
+            return new Microsoft.Windows.ApplicationModel.Resources.ResourceLoader();
+        }
+        catch
+        {
+            var baseDir = AppContext.BaseDirectory;
+            var candidates = new[] { "resources.pri", "HdrImageViewer.pri" };
+            foreach (var candidate in candidates)
+            {
+                var priPath = System.IO.Path.Combine(baseDir, candidate);
+                if (System.IO.File.Exists(priPath))
+                {
+                    try
+                    {
+                        return new Microsoft.Windows.ApplicationModel.Resources.ResourceLoader(priPath);
+                    }
+                    catch
+                    {
+                        // Try next candidate
+                    }
+                }
+            }
+
+            throw;
+        }
+    }
 #endif
 
     public static string GetString(string key)
@@ -20,12 +165,13 @@ public static class Localization
         }
 
 #if WINDOWS
-        if (!s_resourceLoaderFailed)
+        var loader = GetResourceLoader();
+        if (loader != null)
         {
+            var mrtKey = NormalizeKeyForMrt(key);
             try
             {
-                s_resourceLoader ??= new Microsoft.Windows.ApplicationModel.Resources.ResourceLoader();
-                var resourceString = s_resourceLoader.GetString(key);
+                var resourceString = loader.GetString(mrtKey);
                 if (!string.IsNullOrEmpty(resourceString))
                 {
                     return resourceString;
@@ -33,7 +179,24 @@ public static class Localization
             }
             catch
             {
-                s_resourceLoaderFailed = true;
+                // Individual lookup failed for normalized key (e.g. missing resource).
+                // Do NOT mark the ResourceLoader as failed; continue to fallback.
+            }
+
+            if (!string.Equals(mrtKey, key, StringComparison.Ordinal))
+            {
+                try
+                {
+                    var directString = loader.GetString(key);
+                    if (!string.IsNullOrEmpty(directString))
+                    {
+                        return directString;
+                    }
+                }
+                catch
+                {
+                    // Individual lookup failed for direct key as well.
+                }
             }
         }
 #endif

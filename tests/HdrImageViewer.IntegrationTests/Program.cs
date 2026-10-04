@@ -4,9 +4,16 @@ using HdrImageViewer.Rendering;
 using HdrImageViewer.Services;
 using Windows.Graphics.Imaging;
 
-// Explicit integration runner: accepts a synthetic HDR PNG and an isolated output directory.
+// Explicit integration runner: accepts a synthetic HDR PNG and an isolated output directory,
+// or --localization to run Windows MRT and localization regression checks.
+if (args.Length >= 1 && args[0] is "--localization" or "--mrt")
+{
+    await HdrImageViewer.IntegrationTests.MrtLocalizationRegressionChecks.RunAsync();
+    return;
+}
+
 if (args.Length is < 2 or > 3 || (args.Length == 3 && args[2] is not ("--codecs" or "--thumbnails")))
-    throw new ArgumentException("Usage: <HDR PNG fixture> <test output directory> [--codecs|--thumbnails]");
+    throw new ArgumentException("Usage: <HDR PNG fixture> <test output directory> [--codecs|--thumbnails] OR --localization");
 var source = Path.GetFullPath(args[0]);
 var directory = Path.GetFullPath(args[1]);
 Directory.CreateDirectory(directory);

@@ -26,11 +26,7 @@ public partial class App : Application
     /// </summary>
     public App()
     {
-        var preferredLanguage = Services.AppSettingsService.Current.Language;
-        if (!string.IsNullOrWhiteSpace(preferredLanguage))
-        {
-            Windows.Globalization.ApplicationLanguages.PrimaryLanguageOverride = preferredLanguage;
-        }
+        Services.Localization.ApplyLanguagePreference(Services.AppSettingsService.Current.Language);
 
         InitializeComponent();
         HighContrastAdjustment = ApplicationHighContrastAdjustment.Auto;

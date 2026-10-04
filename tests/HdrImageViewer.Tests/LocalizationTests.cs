@@ -247,6 +247,8 @@ public sealed class LocalizationTests
             "tests\\HdrImageViewer.Tests\\LocalizationTests.cs",
             "tests\\HdrImageViewer.Tests\\LivePhotoProbeTests.cs",
             "tests\\HdrImageViewer.Tests\\DecoderCatalogTests.cs",
+            "tests\\HdrImageViewer.WindowsTests\\MrtResourceLoadingTests.cs",
+            "tests\\HdrImageViewer.IntegrationTests\\MrtLocalizationRegressionChecks.cs",
             "Pages\\HomePage.xaml.cs",
             "Services\\DecoderCatalog.cs",
             "Services\\GainMapHdrExportService.cs",
@@ -309,5 +311,43 @@ public sealed class LocalizationTests
         // Fallback for non-existent key returns key name
         var nonExistent = Localization.GetString("NonExistentTestKey123");
         Assert.Equal("NonExistentTestKey123", nonExistent);
+    }
+
+    [Fact]
+    public void NormalizeKeyForMrtTransformsSegmentedKeysProperly()
+    {
+        Assert.Equal("InspectorTabDetails/Text", Localization.NormalizeKeyForMrt("InspectorTabDetails.Text"));
+        Assert.Equal("InspectorTabAnalysis/Text", Localization.NormalizeKeyForMrt("InspectorTabAnalysis.Text"));
+        Assert.Equal("AboutAppName/Text", Localization.NormalizeKeyForMrt("AboutAppName.Text"));
+        Assert.Equal("AppTitle", Localization.NormalizeKeyForMrt("AppTitle"));
+        Assert.Equal(string.Empty, Localization.NormalizeKeyForMrt(string.Empty));
+        Assert.Equal("SettingsOpenDefaultAppsButton/AutomationProperties/Name",
+            Localization.NormalizeKeyForMrt("SettingsOpenDefaultAppsButton.AutomationProperties.Name"));
+    }
+
+    [Fact]
+    public void SystemDefaultClearsLanguageOverrideStateTransition()
+    {
+        // Initial state: System default (empty)
+        Localization.ApplyLanguagePreference(string.Empty);
+        Assert.Equal(string.Empty, Localization.GetAppliedLanguageOverride());
+
+        // Step 1: User selects an explicit language (e.g. Russian)
+        Localization.ApplyLanguagePreference("ru-RU");
+        Assert.Equal("ru-RU", Localization.GetAppliedLanguageOverride());
+
+        // Step 2: Restart simulation with explicit language persisted
+        Localization.ApplyLanguagePreference("ru-RU");
+        Assert.Equal("ru-RU", Localization.GetAppliedLanguageOverride());
+
+        // Step 3: User selects System default (empty string)
+        Localization.ApplyLanguagePreference(string.Empty);
+        Assert.Equal(string.Empty, Localization.GetAppliedLanguageOverride());
+
+        // Step 4: Restart simulation with empty string from persisted settings
+        Localization.ApplyLanguagePreference(null);
+        var finalOverride = Localization.GetAppliedLanguageOverride();
+        Assert.Equal(string.Empty, finalOverride);
+        Assert.NotEqual("ru-RU", finalOverride);
     }
 }
