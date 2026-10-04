@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.34.0 - 2026-10-04
+
+- Fixed HDR filmstrip appearance: gain-map images now preview their authored SDR base instead of reconstructing maximum HDR gain and applying another fixed ACES curve. Single-layer HDR thumbnails use the viewer's SDR white reference and compress highlights with a shared RGB scale, preserving midtones and color ratios.
+- Fixed SDR JPEG XL thumbnails and transparent thumbnail pixels, including HDR JPEG XL. Linear floating-point JPEG XL now retains extended-range pixels through a float decode path instead of being decoded as SDR. Added real-file pixel comparisons against an independently decoded SDR base and equivalent PQ/HLG/linear samples.
+- Kept the filmstrip and toolbar on one row, with thumbnails sized to the available column. Hidden filmstrips stop decoding and release their images; refreshing a folder keeps provisional previews, and failed items are not decoded repeatedly while they remain in the retained window.
+- Corrected EXIF orientation handling for HDR/SDR exports and Gain Map crops. Linear TIFF/EXR exports avoid unused PQ statistics and preserve existing destinations on cancellation.
+- Moved preview analysis onto cancellable background work with stale-result protection, and cached tone-map analysis separately by view mode.
+- Hardened Live Photo preparation and image navigation against stale asynchronous results; canceled video extraction no longer leaves a partial cached file.
+
 ## 1.0.33.0 - 2026-10-02
 
 - Added HEIC / AVIF ISO Gain Map export for single images, crops, and batch queues, with monochrome/RGB maps and verified HDR readback.

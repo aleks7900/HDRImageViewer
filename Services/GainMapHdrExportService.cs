@@ -217,9 +217,14 @@ public static class GainMapHdrExportService
         var gainMapBytes = await UltraHdrGainMapDecoder.ReadSegmentAsync(document.Path, probe.GainMapOffset!.Value, probe.GainMapLength!.Value, cancellationToken);
         var primary = await BitmapDecodeService.DecodeBytesAsync(primaryBytes, colorManageToSrgb: true, respectExifOrientation: false, cancellationToken);
         var gainMap = await BitmapDecodeService.DecodeBytesAsync(gainMapBytes, colorManageToSrgb: false, respectExifOrientation: false, cancellationToken);
-        if (bounds.X + bounds.Width > primary.PixelWidth || bounds.Y + bounds.Height > primary.PixelHeight)
+        var orientation = probe.ExifOrientation ?? 1;
+        var primaryTransform = new ExifOrientationTransform(primary.PixelWidth, primary.PixelHeight, orientation);
+        var gainMapTransform = new ExifOrientationTransform(gainMap.PixelWidth, gainMap.PixelHeight, orientation);
+        if (bounds.Width == 0 || bounds.Height == 0
+            || (ulong)bounds.X + bounds.Width > (ulong)primaryTransform.Width
+            || (ulong)bounds.Y + bounds.Height > (ulong)primaryTransform.Height)
         {
-            throw new InvalidOperationException($"裁切区域超出 base 尺寸: {bounds.X},{bounds.Y} {bounds.Width}x{bounds.Height}, source {primary.PixelWidth}x{primary.PixelHeight}。");
+            throw new InvalidOperationException($"裁切区域超出 base 尺寸: {bounds.X},{bounds.Y} {bounds.Width}x{bounds.Height}, source {primaryTransform.Width}x{primaryTransform.Height}。");
         }
 
         Directory.CreateDirectory(Path.GetDirectoryName(outputPath) ?? Environment.CurrentDirectory);
@@ -232,9 +237,9 @@ public static class GainMapHdrExportService
 
         try
         {
-            var gainBounds = MapBounds(bounds, primary.PixelWidth, primary.PixelHeight, gainMap.PixelWidth, gainMap.PixelHeight);
-            await EncodeDecodedBitmapJpegCropAsync(primary, bounds, basePath, BitmapPixelFormat.Bgra8, cancellationToken);
-            await EncodeDecodedBitmapJpegCropAsync(gainMap, gainBounds, gainPath, BitmapPixelFormat.Bgra8, cancellationToken);
+            var gainBounds = MapBounds(bounds, primaryTransform.Width, primaryTransform.Height, gainMapTransform.Width, gainMapTransform.Height);
+            await EncodeDecodedBitmapJpegCropAsync(primary, bounds, primaryTransform, basePath, BitmapPixelFormat.Bgra8, cancellationToken);
+            await EncodeDecodedBitmapJpegCropAsync(gainMap, gainBounds, gainMapTransform, gainPath, BitmapPixelFormat.Bgra8, cancellationToken);
             await WriteMetadataConfigAsync(probe.Metadata, metadataPath, cancellationToken);
             await RunUltraHdrScenario4Async(cli, basePath, gainPath, metadataPath, candidateOutput, cancellationToken);
             await VerifyUltraHdrAsync(cli, candidateOutput, Path.Combine(tempDir, "verify-metadata.cfg"), cancellationToken);
@@ -433,11 +438,12 @@ public static class GainMapHdrExportService
     private static async Task EncodeDecodedBitmapJpegCropAsync(
         DecodedBitmap bitmap,
         BitmapBounds bounds,
+        ExifOrientationTransform orientation,
         string outputPath,
         BitmapPixelFormat outputFormat,
         CancellationToken cancellationToken)
     {
-        var pixels = ConvertCropToBgra8(bitmap, bounds);
+        var pixels = await Task.Run(() => ConvertCropToBgra8(bitmap, bounds, orientation, cancellationToken), cancellationToken);
         await using var output = new FileStream(outputPath, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, 1024 * 1024, useAsync: true);
         using var randomAccess = output.AsRandomAccessStream();
         var encoder = await BitmapEncoder.CreateAsync(BitmapEncoder.JpegEncoderId, randomAccess);
@@ -453,16 +459,17 @@ public static class GainMapHdrExportService
         cancellationToken.ThrowIfCancellationRequested();
     }
 
-    private static byte[] ConvertCropToBgra8(DecodedBitmap bitmap, BitmapBounds bounds)
+    private static byte[] ConvertCropToBgra8(DecodedBitmap bitmap, BitmapBounds bounds, ExifOrientationTransform orientation, CancellationToken cancellationToken)
     {
         var result = new byte[checked((int)bounds.Width * (int)bounds.Height * 4)];
         var destination = 0;
         for (var y = 0; y < bounds.Height; y++)
         {
-            var sourceY = checked((int)bounds.Y + y);
+            cancellationToken.ThrowIfCancellationRequested();
+            var orientedY = checked((int)bounds.Y + y);
             for (var x = 0; x < bounds.Width; x++)
             {
-                var sourceX = checked((int)bounds.X + x);
+                var (sourceX, sourceY) = orientation.MapToSource(checked((int)bounds.X + x), orientedY);
                 var rgb = ReadEncodedRgb(bitmap, sourceX, sourceY);
                 result[destination++] = ToByte(rgb.Z);
                 result[destination++] = ToByte(rgb.Y);
@@ -666,14 +673,18 @@ public static class GainMapHdrExportService
 
     private sealed class GainMapSceneSource(GainMapRenderInputs inputs) : IHdrSceneSource
     {
-        public int Width => inputs.Primary.PixelWidth;
+        private readonly ExifOrientationTransform _orientation = new(
+            inputs.Primary.PixelWidth, inputs.Primary.PixelHeight, (int)inputs.Constants.Orientation.X);
 
-        public int Height => inputs.Primary.PixelHeight;
+        public int Width => _orientation.Width;
+
+        public int Height => _orientation.Height;
 
         public string Description => $"gain-map source base {inputs.Primary.PixelWidth}x{inputs.Primary.PixelHeight}, gain {inputs.GainMap.PixelWidth}x{inputs.GainMap.PixelHeight}";
 
         public Vector3 ReadSceneLinearBt2020(int x, int y)
         {
+            (x, y) = _orientation.MapToSource(x, y);
             var sdr = HdrColorMath.DecodeGainMapBaseToLinear(ReadEncodedRgb(inputs.Primary, x, y), inputs.Constants);
             var gain = ReadGainMapSample(inputs.GainMap, x, y, inputs.Primary.PixelWidth, inputs.Primary.PixelHeight);
             var scene = inputs.Constants.GainMapControl.Y > 0.5f

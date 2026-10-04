@@ -35,7 +35,7 @@ public sealed partial class HomePage
         _isFolderNavigationLoading = true;
         try
         {
-            await LoadImagePathAsync(_folderImagePaths[nextIndex], invalidateRendererCache: false);
+            await LoadImagePathAsync(_folderImagePaths[nextIndex], invalidateRendererCache: false, preserveNavigationList: true);
         }
         finally
         {

@@ -56,8 +56,7 @@ public sealed partial class HomePage : Page
     private const double ViewerChromeHorizontalInset = 32.0;
     private const double ViewerChromeMaxWidth = 1180.0;
     private const double CompactViewerChromeBreakpoint = 860.0;
-    private const double FilmstripItemWidth = 68.0;
-    private const double ToolbarReservedWidth = 640.0;
+    private const double FilmstripItemWidth = 88.0;
     private const double PanMoveThreshold = 3.0;
 
     private readonly D3D11HdrRenderPipeline _renderer = new();
@@ -104,6 +103,8 @@ public sealed partial class HomePage : Page
     private bool _isViewerChromeVisible = true;
     private bool _hasAppliedInspectorLayout;
     private bool _inspectorTargetVisible = true;
+    private bool _narrowInspectorRequested;
+    private bool _inspectorIsOverlay;
     private bool _hasZoomAnimationAnchor;
     private double _zoomAnimationAnchorX = 0.5;
     private double _zoomAnimationAnchorY = 0.5;
@@ -112,6 +113,9 @@ public sealed partial class HomePage : Page
     private readonly ImagePreloadController _imagePreloads;
     private readonly FilmstripThumbnailController _filmstripThumbnails;
     private readonly ImageLoadController _imageLoads;
+    private readonly ImageLoadController _companionLoads;
+    private Microsoft.UI.Dispatching.DispatcherQueueTimer? _filmstripViewportTimer;
+    private bool _isCompanionMediaPreparing;
     private AppUserSettings _settings = AppSettingsService.Current;
     private bool _updatingHdrModeControls;
     private bool _isImmersiveEventAttached;
@@ -136,6 +140,11 @@ public sealed partial class HomePage : Page
 
     public static Visibility BoolToVisibility(bool value) =>
         value ? Visibility.Visible : Visibility.Collapsed;
+
+    public static Visibility InverseBoolToVisibility(bool value) =>
+        value ? Visibility.Collapsed : Visibility.Visible;
+
+    public static string ThumbnailPlaceholderGlyph(bool hasError) => hasError ? "\uE783" : "\uEB9F";
 
     public static string CompanionMuteGlyph(bool muted) =>
         muted ? "\uE74F" : "\uE767";
@@ -162,6 +171,11 @@ public sealed partial class HomePage : Page
         _filmstripThumbnails = new FilmstripThumbnailController(FilmstripItems, _lifetime.Token);
         _imagePreloads = new ImagePreloadController(_lifetime.Token);
         _imageLoads = new ImageLoadController(_lifetime.Token);
+        _companionLoads = new ImageLoadController(_lifetime.Token);
+        _filmstripViewportTimer = DispatcherQueue.CreateTimer();
+        _filmstripViewportTimer.Interval = TimeSpan.FromMilliseconds(80);
+        _filmstripViewportTimer.IsRepeating = false;
+        _filmstripViewportTimer.Tick += (_, _) => QueueVisibleFilmstripThumbnails();
         RegisterKeyboardAccelerators();
         _zoomAnimationTimer = DispatcherQueue.CreateTimer();
         _zoomAnimationTimer.Interval = TimeSpan.FromMilliseconds(ZoomAnimationFrameMilliseconds);
@@ -177,6 +191,7 @@ public sealed partial class HomePage : Page
 
     private void InitializeLivePhotoPlayer()
     {
+        var previous = _livePhotoMediaPlayer;
         _livePhotoMediaPlayer = new MediaPlayer
         {
             IsMuted = true,
@@ -185,6 +200,13 @@ public sealed partial class HomePage : Page
         _livePhotoMediaPlayer.MediaEnded += LivePhotoMediaPlayer_MediaEnded;
         _livePhotoMediaPlayer.MediaFailed += LivePhotoMediaPlayer_MediaFailed;
         LivePhotoPlayer.SetMediaPlayer(_livePhotoMediaPlayer);
+        if (previous is not null)
+        {
+            previous.MediaOpened -= LivePhotoMediaPlayer_MediaOpened;
+            previous.MediaEnded -= LivePhotoMediaPlayer_MediaEnded;
+            previous.MediaFailed -= LivePhotoMediaPlayer_MediaFailed;
+            previous.Dispose();
+        }
     }
 
     private void RegisterKeyboardAccelerators()
@@ -282,6 +304,8 @@ public sealed partial class HomePage : Page
 
         _imagePreloads.Dispose();
         _imageLoads.Dispose();
+        _companionLoads.Dispose();
+        _filmstripViewportTimer?.Stop();
         CancelAndDispose(ref _folderRefreshCts);
         _folderImageIndex.Dispose();
         _filmstripThumbnails.Dispose();
@@ -337,19 +361,26 @@ public sealed partial class HomePage : Page
         var isImmersive = immersiveOverride
             ?? (App.MainWindow is MainWindow mainWindow && mainWindow.IsImmersiveViewing);
         var hasInspectorWidth = HomeRoot.ActualWidth >= InspectorMinimumWindowWidth;
-        var showInspector = _settings.ShowInspectorPanel && !isImmersive && hasInspectorWidth;
+        var showInspector = _settings.ShowInspectorPanel && !isImmersive && (hasInspectorWidth || _narrowInspectorRequested);
+        var overlayChanged = _inspectorIsOverlay != !hasInspectorWidth;
+        _inspectorIsOverlay = !hasInspectorWidth;
+        Grid.SetColumn(InspectorPanel, _inspectorIsOverlay ? 0 : 1);
+        Grid.SetColumnSpan(InspectorPanel, _inspectorIsOverlay ? 2 : 1);
+        InspectorPanel.HorizontalAlignment = _inspectorIsOverlay ? HorizontalAlignment.Right : HorizontalAlignment.Stretch;
+        InspectorPanel.Width = _inspectorIsOverlay ? Math.Min(InspectorPanelWidth - 28, Math.Max(240, HomeRoot.ActualWidth - 32)) : double.NaN;
         if (TopInspectorToggleButton is not null)
         {
-            TopInspectorToggleButton.IsChecked = _settings.ShowInspectorPanel;
-            TopInspectorToggleButton.Visibility = isImmersive || !hasInspectorWidth
+            TopInspectorToggleButton.IsChecked = showInspector;
+            TopInspectorToggleButton.Visibility = isImmersive
                 ? Visibility.Collapsed
                 : Visibility.Visible;
             ToolTipService.SetToolTip(
                 TopInspectorToggleButton,
-                _settings.ShowInspectorPanel ? "隐藏详情栏 (I)" : "显示详情栏 (I)");
+                showInspector ? "隐藏详情栏 (I)" : "显示详情栏 (I)");
         }
 
         var shouldAnimate = _hasAppliedInspectorLayout
+            && !overlayChanged && !_inspectorIsOverlay
             && new Windows.UI.ViewManagement.UISettings().AnimationsEnabled;
         _hasAppliedInspectorLayout = true;
         if (!shouldAnimate)
@@ -366,7 +397,7 @@ public sealed partial class HomePage : Page
         _inspectorStoryboard?.Stop();
         _inspectorStoryboard = null;
         _inspectorTargetVisible = showInspector;
-        InspectorColumn.Width = showInspector ? new GridLength(InspectorPanelWidth) : new GridLength(0);
+        InspectorColumn.Width = showInspector && !_inspectorIsOverlay ? new GridLength(InspectorPanelWidth) : new GridLength(0);
         InspectorPanel.Visibility = showInspector ? Visibility.Visible : Visibility.Collapsed;
         InspectorPanel.Opacity = 1.0;
         InspectorPanelTransform.X = 0.0;
@@ -684,7 +715,7 @@ public sealed partial class HomePage : Page
             return;
         }
 
-        await LoadImagePathAsync(ViewModel.FilePath, invalidateRendererCache: true);
+        await LoadImagePathAsync(ViewModel.FilePath, invalidateRendererCache: true, preserveNavigationList: true);
     }
 
     private async Task ShowSdrFallbackImageAsync(string path, CancellationToken cancellationToken)
@@ -702,6 +733,7 @@ public sealed partial class HomePage : Page
                 DecodePixelWidth = CalculateViewerPreloadMaxPixelSize(),
             };
             await bitmap.SetSourceAsync(stream);
+            cancellationToken.ThrowIfCancellationRequested();
             SetXamlFallbackDisplayAspectRatio(bitmap.PixelWidth, bitmap.PixelHeight);
             FallbackImage.Source = bitmap;
             ShowFallbackImageLayer();
@@ -709,9 +741,11 @@ public sealed partial class HomePage : Page
         }
         catch (OperationCanceledException)
         {
+            throw;
         }
         catch (Exception)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             // Last resort: keep the URI-based attempt so behaviour never
             // regresses on hosts where the stream path is unavailable.
             FallbackImage.Source = new BitmapImage
@@ -776,8 +810,12 @@ public sealed partial class HomePage : Page
     private async Task LoadImagePathAsync(
         string path,
         bool invalidateRendererCache,
-        IReadOnlyList<string>? explicitNavigationPaths = null)
+        IReadOnlyList<string>? explicitNavigationPaths = null,
+        bool preserveNavigationList = false)
     {
+        explicitNavigationPaths = ImageNavigationContext.ResolveExplicitPaths(
+            path, explicitNavigationPaths, _folderImagePaths, _currentNavigationIsExplicit, preserveNavigationList);
+        if (invalidateRendererCache) _filmstripThumbnails.Invalidate(path);
         var imageLoad = _imageLoads.Begin();
         var cancellationToken = imageLoad.Token;
         _zoomRenderCts?.Cancel();
@@ -952,6 +990,7 @@ public sealed partial class HomePage : Page
             SidePreviousImageButton.Visibility = Visibility.Collapsed;
             SideNextImageButton.Visibility = Visibility.Collapsed;
             FilmstripRow.Visibility = Visibility.Collapsed;
+            StopFilmstripThumbnailLoads();
             ImageFilmstrip.SelectedIndex = -1;
             FolderPositionText.Text = "0 / 0";
             FolderFileNameText.Text = ViewModel.FileName;
@@ -975,6 +1014,7 @@ public sealed partial class HomePage : Page
         SideNextImageButton.Visibility = canGoNext ? Visibility.Visible : Visibility.Collapsed;
         var showFilmstrip = _settings.ShowFilmstrip && _folderImagePaths.Count > 1;
         FilmstripRow.Visibility = showFilmstrip ? Visibility.Visible : Visibility.Collapsed;
+        if (!showFilmstrip) StopFilmstripThumbnailLoads();
         FolderFileNameText.Visibility = showFilmstrip ? Visibility.Collapsed : Visibility.Visible;
         FolderPositionText.Text = $"{_currentFolderIndex + 1} / {_folderImagePaths.Count}";
         var currentFileName = Path.GetFileName(_folderImagePaths[_currentFolderIndex]);
@@ -1030,7 +1070,10 @@ public sealed partial class HomePage : Page
         // focus window, and items entering it would otherwise never get a
         // thumbnail once the initial window around the opening image finished.
         // Already-thumbnailed items are skipped, so repeat calls are cheap.
-        _filmstripThumbnails.QueueLoads(_currentFolderIndex);
+        if (_settings.ShowFilmstrip && _folderImagePaths.Count > 1)
+            _filmstripThumbnails.QueueLoads(_currentFolderIndex);
+        else
+            StopFilmstripThumbnailLoads();
 
         UpdateFilmstripSelection();
         UpdateFilmstripChromeLayout();
@@ -1070,7 +1113,32 @@ public sealed partial class HomePage : Page
             selectedItem.IsCurrent = true;
             _currentFilmstripItem = selectedItem;
         }
-        DispatcherQueue.TryEnqueue(() => ImageFilmstrip.ScrollIntoView(selectedItem, ScrollIntoViewAlignment.Leading));
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            if (!ReferenceEquals(_currentFilmstripItem, selectedItem)
+                || FilmstripRow.Visibility != Visibility.Visible) return;
+            ImageFilmstrip.ScrollIntoView(selectedItem, ScrollIntoViewAlignment.Default);
+            _filmstripViewportTimer?.Start();
+        });
+    }
+
+    private void ImageFilmstrip_ContainerContentChanging(ListViewBase sender, ContainerContentChangingEventArgs args)
+    {
+        if (FilmstripRow.Visibility == Visibility.Visible)
+            _filmstripViewportTimer?.Start();
+    }
+
+    private void StopFilmstripThumbnailLoads()
+    {
+        _filmstripViewportTimer?.Stop();
+        _filmstripThumbnails?.Cancel();
+    }
+
+    private void QueueVisibleFilmstripThumbnails()
+    {
+        if (!IsLoaded || FilmstripRow.Visibility != Visibility.Visible) return;
+        var panel = ImageFilmstrip.ItemsPanelRoot as ItemsStackPanel;
+        _filmstripThumbnails.QueueLoads(_currentFolderIndex, panel?.FirstVisibleIndex ?? -1, panel?.LastVisibleIndex ?? -1);
     }
 
     private void UpdateFilmstripChromeLayout()
@@ -1087,43 +1155,51 @@ public sealed partial class HomePage : Page
             Math.Max(1.0, availableWidth - ViewerChromeHorizontalInset),
             ViewerChromeMaxWidth);
         PhotoToolbarOverlay.MaxWidth = overlayMaxWidth;
+        PhotoToolbarOverlay.Width = overlayMaxWidth;
 
         var isCompact = availableWidth < CompactViewerChromeBreakpoint;
+        PhotoCommandsGrid.ColumnSpacing = availableWidth < 480 ? 1 : isCompact ? 2 : 6;
         ReloadImageButton.Visibility = isCompact ? Visibility.Collapsed : Visibility.Visible;
         CropButton.Visibility = isCompact ? Visibility.Collapsed : Visibility.Visible;
         SingleLayerHdrSaveAsButton.Visibility = isCompact ? Visibility.Collapsed : Visibility.Visible;
         var showFilmstrip = FilmstripRow.Visibility == Visibility.Visible;
-        FolderFileNameText.Visibility = isCompact || showFilmstrip ? Visibility.Collapsed : Visibility.Visible;
+        FolderFileNameText.Visibility = showFilmstrip ? Visibility.Collapsed : Visibility.Visible;
+        FolderFileNameText.MinWidth = 0;
         ZoomOutButton.Visibility = isCompact ? Visibility.Collapsed : Visibility.Visible;
         ZoomLevelText.Visibility = isCompact ? Visibility.Collapsed : Visibility.Visible;
         ZoomInButton.Visibility = isCompact ? Visibility.Collapsed : Visibility.Visible;
         ActualSizeButton.Visibility = isCompact ? Visibility.Collapsed : Visibility.Visible;
         ZoomFillButton.Visibility = isCompact ? Visibility.Collapsed : Visibility.Visible;
 
-        var desiredFilmstripWidth = Math.Min(
-            FilmstripItems.Count * FilmstripItemWidth + 4.0,
-            overlayMaxWidth - (isCompact ? 300.0 : ToolbarReservedWidth));
-        ImageFilmstrip.Width = Math.Max(0.0, desiredFilmstripWidth);
-        FilmstripRow.Width = ImageFilmstrip.Width;
+        // The star column owns the available width. A guessed fixed width can
+        // overflow its neighbors when the image counter grows or DPI changes.
+        FilmstripRow.MaxWidth = FilmstripItems.Count * FilmstripItemWidth + 4.0;
     }
 
     private async void ImageFilmstrip_ItemClick(object sender, ItemClickEventArgs e)
     {
-        if (e.ClickedItem is not FilmstripImageItem item
-            || _isFolderNavigationLoading
+        if (e.ClickedItem is not FilmstripImageItem item)
+        {
+            return;
+        }
+        if (_isFolderNavigationLoading
             || string.Equals(item.Path, ViewModel.FilePath, StringComparison.OrdinalIgnoreCase))
         {
+            UpdateFilmstripSelection();
             return;
         }
 
         _isFolderNavigationLoading = true;
         try
         {
-            await LoadImagePathAsync(item.Path, invalidateRendererCache: false);
+            await LoadImagePathAsync(item.Path, invalidateRendererCache: false, preserveNavigationList: true);
         }
         finally
         {
             _isFolderNavigationLoading = false;
+            // ListView selects before loading; rejected or failed opens must
+            // not leave its selection on a different item from the viewer.
+            UpdateFilmstripSelection();
         }
     }
 
@@ -1624,7 +1700,16 @@ public sealed partial class HomePage : Page
 
     private void ToggleInspectorPanel()
     {
-        AppSettingsService.SetShowInspectorPanel(!_settings.ShowInspectorPanel);
+        _narrowInspectorRequested = !_inspectorTargetVisible;
+        AppSettingsService.SetShowInspectorPanel(!_inspectorTargetVisible);
+        ApplyInspectorLayout();
+    }
+
+    private void ShowInspectorForTools()
+    {
+        _narrowInspectorRequested = true;
+        AppSettingsService.SetShowInspectorPanel(true);
+        ApplyInspectorLayout();
     }
 
     private void CancelCrop_Click(object sender, RoutedEventArgs e)

@@ -244,7 +244,9 @@ public static class SingleLayerHdrExportService
             Height = checked((uint)source.Height),
         };
 
-        if (exportBounds.X + exportBounds.Width > source.Width || exportBounds.Y + exportBounds.Height > source.Height)
+        if (exportBounds.Width == 0 || exportBounds.Height == 0
+            || (ulong)exportBounds.X + exportBounds.Width > (ulong)source.Width
+            || (ulong)exportBounds.Y + exportBounds.Height > (ulong)source.Height)
         {
             throw new InvalidOperationException($"裁切区域超出 HDR 源尺寸: {exportBounds.X},{exportBounds.Y} {exportBounds.Width}x{exportBounds.Height}, source {source.Width}x{source.Height}。");
         }
@@ -257,35 +259,37 @@ public static class SingleLayerHdrExportService
 
         try
         {
-            ExportLightLevelStats lightLevelStats;
+            ExportLightLevelStats? lightLevelStats = null;
             if (extension == ".jxr")
             {
                 lightLevelStats = await WriteJpegXrAsync(candidateOutput, source, exportBounds, cancellationToken);
             }
+            else if (extension is ".tif" or ".tiff")
+            {
+                await Task.Run(() => WriteFloatTiffAsync(candidateOutput, source, exportBounds, cancellationToken), cancellationToken);
+            }
+            else if (extension == ".exr")
+            {
+                await WriteOpenExrAsync(candidateOutput, source, exportBounds, cancellationToken);
+            }
             else
             {
-                lightLevelStats = await WriteEncodedRgb16PngAsync(pngPath, source, exportBounds, transfer, options, cancellationToken);
+                var encodedLightLevelStats = await WriteEncodedRgb16PngAsync(pngPath, source, exportBounds, transfer, options, cancellationToken);
+                lightLevelStats = encodedLightLevelStats;
                 switch (extension)
                 {
                     case ".png":
                         File.Move(pngPath, candidateOutput);
                         break;
-                    case ".tif":
-                    case ".tiff":
-                        await WriteFloatTiffAsync(candidateOutput, source, exportBounds, cancellationToken);
-                        break;
-                    case ".exr":
-                        await WriteOpenExrAsync(candidateOutput, source, exportBounds, cancellationToken);
-                        break;
                     case ".jxl":
-                        await RunCjxlAsync(capability.Details, pngPath, candidateOutput, transfer, lightLevelStats, cancellationToken);
+                        await RunCjxlAsync(capability.Details, pngPath, candidateOutput, transfer, encodedLightLevelStats, cancellationToken);
                         break;
                     case ".avif":
-                        await RunAvifencAsync(capability.Details, pngPath, candidateOutput, transfer, lightLevelStats, cancellationToken);
+                        await RunAvifencAsync(capability.Details, pngPath, candidateOutput, transfer, encodedLightLevelStats, cancellationToken);
                         break;
                     case ".heic":
                     case ".heif":
-                        await RunHeifEncAsync(capability.Details, pngPath, candidateOutput, transfer, lightLevelStats, cancellationToken);
+                        await RunHeifEncAsync(capability.Details, pngPath, candidateOutput, transfer, encodedLightLevelStats, cancellationToken);
                         break;
                     default:
                         throw new InvalidOperationException("当前单层 HDR 编码支持 PNG、TIFF、JPEG XR、EXR、JXL、AVIF 和 HEIF/HEIC。");
@@ -301,8 +305,14 @@ public static class SingleLayerHdrExportService
             var jxlNote = extension == ".jxl" && transfer == SingleLayerHdrExportTransfer.Pq
                 ? "; JXL PQ container intensity target is signaled by libjxl, commonly 10000 nits"
                 : string.Empty;
-            var transferSummary = extension == ".jxr" ? "linear scRGB FP16" : DescribeTransfer(transfer);
-            return $"{capability.Backend}; {source.Description}; {transferSummary}; HLG peak {options.HlgPeakNits:0} nits; CLLI {lightLevelStats.MaxCllNits}/{lightLevelStats.MaxPallNits} nits{jxlNote}; {extension.TrimStart('.').ToUpperInvariant()}; {exportBounds.Width}x{exportBounds.Height}";
+            var transferSummary = extension switch
+            {
+                ".jxr" or ".exr" => "linear scRGB FP16",
+                ".tif" or ".tiff" => "linear scRGB FP32",
+                _ => $"{DescribeTransfer(transfer)}; HLG peak {options.HlgPeakNits:0} nits",
+            };
+            var lightLevelSummary = lightLevelStats is { } stats ? $"; CLLI {stats.MaxCllNits}/{stats.MaxPallNits} nits" : string.Empty;
+            return $"{capability.Backend}; {source.Description}; {transferSummary}{lightLevelSummary}{jxlNote}; {extension.TrimStart('.').ToUpperInvariant()}; {exportBounds.Width}x{exportBounds.Height}";
         }
         finally
         {
@@ -620,8 +630,15 @@ public static class SingleLayerHdrExportService
             throw new NotSupportedException("HdrImageViewer.Native OpenEXR backend is not available.");
         }
 
-        var pixels = await Task.Run(() => CreateRgba16FScRgbPixels(source, bounds, cancellationToken), cancellationToken);
-        NativeExrDecoder.Encode(outputPath, checked((int)bounds.Width), checked((int)bounds.Height), pixels);
+        await Task.Run(() =>
+        {
+            var pixels = CreateRgba16FScRgbPixels(source, bounds, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            // The native encoder has no cancellation API. Await its completion
+            // before cleaning up the candidate, then suppress the final commit.
+            NativeExrDecoder.Encode(outputPath, checked((int)bounds.Width), checked((int)bounds.Height), pixels);
+            cancellationToken.ThrowIfCancellationRequested();
+        }, cancellationToken);
     }
 
     private static byte[] CreateRgba16FScRgbPixels(
@@ -935,14 +952,18 @@ public static class SingleLayerHdrExportService
         float previewSceneToSdrWhiteScale,
         float previewMaxSceneValue) : IHdrSceneSource
     {
-        public int Width => inputs.Primary.PixelWidth;
+        private readonly ExifOrientationTransform _orientation = new(
+            inputs.Primary.PixelWidth, inputs.Primary.PixelHeight, (int)inputs.Constants.Orientation.X);
 
-        public int Height => inputs.Primary.PixelHeight;
+        public int Width => _orientation.Width;
+
+        public int Height => _orientation.Height;
 
         public string Description => $"gain-map source base {inputs.Primary.PixelWidth}x{inputs.Primary.PixelHeight}, gain {inputs.GainMap.PixelWidth}x{inputs.GainMap.PixelHeight}, gain-map weight {(matchPreview ? "preview " : autoGainMapWeight ? "auto " : string.Empty)}{gainMapWeight:0.##}";
 
         public Vector3 ReadSceneLinearBt2020(int x, int y)
         {
+            (x, y) = _orientation.MapToSource(x, y);
             var sdr = HdrColorMath.DecodeGainMapBaseToLinear(ReadEncodedRgb(inputs.Primary, x, y), inputs.Constants);
             var gain = ReadGainMapSample(inputs.GainMap, x, y, inputs.Primary.PixelWidth, inputs.Primary.PixelHeight);
             var scene = inputs.Constants.GainMapControl.Y > 0.5f

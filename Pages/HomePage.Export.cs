@@ -132,6 +132,10 @@ public sealed partial class HomePage
 
         var pixelWidth = (uint)Math.Max(0, _renderer.ContentPixelWidth);
         var pixelHeight = (uint)Math.Max(0, _renderer.ContentPixelHeight);
+        if (ExifOrientationTransform.SwapsDimensions((int)_renderer.ContentOrientation))
+        {
+            (pixelWidth, pixelHeight) = (pixelHeight, pixelWidth);
+        }
         if (SelectedCropExportMode == CropExportMode.SdrPreview)
         {
             // SDR display bypasses D3D. Use the same source and orientation as

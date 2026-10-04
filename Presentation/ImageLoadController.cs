@@ -36,7 +36,8 @@ internal sealed class ImageLoadController : IDisposable
         {
             return !_isDisposed
                 && operation.Generation == _generation
-                && ReferenceEquals(_currentSource, operation.Source);
+                && ReferenceEquals(_currentSource, operation.Source)
+                && !operation.Token.IsCancellationRequested;
         }
     }
 

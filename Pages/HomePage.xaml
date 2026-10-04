@@ -111,8 +111,8 @@
         <Style
             x:Key="FilmstripListViewItemStyle"
             TargetType="ListViewItem">
-            <Setter Property="Width" Value="64" />
-            <Setter Property="Height" Value="46" />
+            <Setter Property="Width" Value="84" />
+            <Setter Property="Height" Value="60" />
             <Setter Property="MinWidth" Value="0" />
             <Setter Property="Margin" Value="2,0" />
             <Setter Property="Padding" Value="0" />
@@ -397,7 +397,7 @@
                     AutomationProperties.Name="上一张"
                     Click="PreviousImage_Click"
                     Style="{StaticResource SideNavigationButtonStyle}"
-                    ToolTipService.ToolTip="上一张">
+                    ToolTipService.ToolTip="上一张 (←)">
                     <FontIcon
                         FontSize="20"
                         Glyph="&#xE76B;" />
@@ -411,7 +411,7 @@
                     AutomationProperties.Name="下一张"
                     Click="NextImage_Click"
                     Style="{StaticResource SideNavigationButtonStyle}"
-                    ToolTipService.ToolTip="下一张">
+                    ToolTipService.ToolTip="下一张 (→)">
                     <FontIcon
                         FontSize="20"
                         Glyph="&#xE76C;" />
@@ -461,7 +461,7 @@
                         AutomationProperties.Name="全屏"
                         Click="FullScreen_Click"
                         Style="{StaticResource PhotoToolbarButtonStyle}"
-                        ToolTipService.ToolTip="全屏">
+                        ToolTipService.ToolTip="全屏 (F11)">
                         <FontIcon
                             x:Name="TopFullScreenIcon"
                             FontSize="16"
@@ -782,8 +782,9 @@
                         <TranslateTransform x:Name="PhotoToolbarOverlayTransform" Y="0" />
                     </Border.RenderTransform>
                     <Grid
-                        HorizontalAlignment="Center"
-                        ColumnSpacing="8">
+                        x:Name="PhotoCommandsGrid"
+                        HorizontalAlignment="Stretch"
+                        ColumnSpacing="6">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="Auto" />
@@ -808,7 +809,7 @@
                             AutomationProperties.Name="打开图片"
                             Click="OpenImage_Click"
                             Style="{StaticResource PhotoToolbarButtonStyle}"
-                            ToolTipService.ToolTip="打开">
+                            ToolTipService.ToolTip="打开图片 (Ctrl+O)">
                             <SymbolIcon Symbol="OpenFile" />
                         </Button>
                         <Button
@@ -834,7 +835,7 @@
                             AutomationProperties.Name="上一张"
                             Click="PreviousImage_Click"
                             Style="{StaticResource PhotoToolbarButtonStyle}"
-                            ToolTipService.ToolTip="上一张">
+                            ToolTipService.ToolTip="上一张 (←)">
                             <FontIcon
                                 FontSize="16"
                                 Glyph="&#xE76B;" />
@@ -850,16 +851,17 @@
                         <Grid
                             x:Name="FilmstripRow"
                             Grid.Column="5"
-                            Height="46"
+                            Height="64"
                             MinWidth="0"
                             HorizontalAlignment="Stretch"
                             Visibility="Collapsed">
                             <ListView
                                 x:Name="ImageFilmstrip"
-                                Height="46"
+                                Height="64"
                                 HorizontalAlignment="Stretch"
                                 AutomationProperties.AutomationId="ImageFilmstrip"
-                                AutomationProperties.Name="同文件夹图片胶片条"
+                                AutomationProperties.Name="图片胶片栏"
+                                ContainerContentChanging="ImageFilmstrip_ContainerContentChanging"
                                 Background="Transparent"
                                 BorderThickness="0"
                                 IsItemClickEnabled="True"
@@ -879,11 +881,11 @@
                                 <ListView.ItemTemplate>
                                     <DataTemplate x:DataType="presentation:FilmstripImageItem">
                                         <Grid
-                                            Width="60"
-                                            Height="42"
+                                            Width="80"
+                                            Height="56"
                                             HorizontalAlignment="Center"
                                             VerticalAlignment="Center"
-                                            ToolTipService.ToolTip="{x:Bind FileName}">
+                                            ToolTipService.ToolTip="{x:Bind PreviewDescription, Mode=OneWay}">
                                             <Border
                                                 Background="{ThemeResource AccentFillColorTertiaryBrush}"
                                                 BorderBrush="{ThemeResource AccentFillColorDefaultBrush}"
@@ -903,11 +905,12 @@
                                                         VerticalAlignment="Center"
                                                         FontSize="16"
                                                         Foreground="{ThemeResource TextFillColorTertiaryBrush}"
-                                                        Glyph="&#xEB9F;" />
+                                                        Glyph="{x:Bind local:HomePage.ThumbnailPlaceholderGlyph(HasLoadError), Mode=OneWay}"
+                                                        Visibility="{x:Bind local:HomePage.InverseBoolToVisibility(HasThumbnail), Mode=OneWay}" />
                                                     <Image
                                                         AutomationProperties.Name="{x:Bind FileName}"
                                                         Source="{x:Bind Thumbnail, Mode=OneWay}"
-                                                        Stretch="UniformToFill" />
+                                                        Stretch="Uniform" />
                                                 </Grid>
                                             </Border>
                                         </Grid>
@@ -918,7 +921,8 @@
                         <TextBlock
                             x:Name="FolderFileNameText"
                             Grid.Column="5"
-                            MinWidth="220"
+                            MinWidth="0"
+                            ToolTipService.ToolTip="{x:Bind ViewModel.FileName, Mode=OneWay}"
                             VerticalAlignment="Center"
                             FontWeight="SemiBold"
                             Text="{x:Bind ViewModel.FileName, Mode=OneWay}"
@@ -931,7 +935,7 @@
                             AutomationProperties.Name="下一张"
                             Click="NextImage_Click"
                             Style="{StaticResource PhotoToolbarButtonStyle}"
-                            ToolTipService.ToolTip="下一张">
+                            ToolTipService.ToolTip="下一张 (→)">
                             <FontIcon
                                 FontSize="16"
                                 Glyph="&#xE76C;" />
@@ -1029,7 +1033,7 @@
                             Click="FullScreen_Click"
                             Visibility="Collapsed"
                             Style="{StaticResource PhotoToolbarButtonStyle}"
-                            ToolTipService.ToolTip="全屏">
+                            ToolTipService.ToolTip="全屏 (F11)">
                             <FontIcon
                                 x:Name="FullScreenIcon"
                                 FontSize="16"
@@ -1066,7 +1070,7 @@
                 </Border.RenderTransform>
                 <Grid RowSpacing="16">
                     <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
-                    <SelectorBar x:Name="InspectorSectionSelector" SelectionChanged="InspectorSection_SelectionChanged">
+                    <SelectorBar x:Name="InspectorSectionSelector" AutomationProperties.AutomationId="InspectorSectionSelector" AutomationProperties.Name="详情与分析面板" SelectionChanged="InspectorSection_SelectionChanged">
                         <SelectorBarItem x:Name="InspectorDetailsTab" Text="详情" IsSelected="True" />
                         <SelectorBarItem x:Name="InspectorAnalysisTab" Text="分析" />
                         <SelectorBarItem x:Name="InspectorGamutTab" Text="色域" />

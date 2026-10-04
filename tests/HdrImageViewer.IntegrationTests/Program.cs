@@ -5,11 +5,16 @@ using HdrImageViewer.Services;
 using Windows.Graphics.Imaging;
 
 // Explicit integration runner: accepts a synthetic HDR PNG and an isolated output directory.
-if (args.Length is < 2 or > 3 || (args.Length == 3 && args[2] != "--codecs"))
-    throw new ArgumentException("Usage: <HDR PNG fixture> <test output directory> [--codecs]");
+if (args.Length is < 2 or > 3 || (args.Length == 3 && args[2] is not ("--codecs" or "--thumbnails")))
+    throw new ArgumentException("Usage: <HDR PNG fixture> <test output directory> [--codecs|--thumbnails]");
 var source = Path.GetFullPath(args[0]);
 var directory = Path.GetFullPath(args[1]);
 Directory.CreateDirectory(directory);
+if (args.Length == 3 && args[2] == "--thumbnails")
+{
+    await ThumbnailRegressionChecks.RunAsync(source, directory);
+    return;
+}
 var broken = Path.Combine(directory, "broken.png");
 await File.WriteAllTextAsync(broken, "invalid integration fixture");
 var queue = new BatchExportController();
@@ -48,6 +53,9 @@ if (args.Length == 3)
             var pixels = await BitmapDecodeService.DecodeDocumentAsync(reopened.Document);
             if (pixels.PixelWidth != 640 || pixels.PixelHeight != 320 || !pixels.IsHdrEncoded || pixels.RgbaPixels.Distinct().Count() < 4)
                 throw new InvalidDataException($"Invalid HDR round trip: {output}: {pixels.RenderEncodingSummary}");
+            var thumbnail = await BitmapDecodeService.DecodeDocumentForThumbnailAsync(reopened.Document, 128);
+            if (thumbnail.PixelWidth != 128 || thumbnail.PixelHeight != 64)
+                throw new InvalidDataException($"Thumbnail size limit ignored: {output}: {thumbnail.PixelWidth}x{thumbnail.PixelHeight}");
             if (extension is ".heic" or ".avif")
             {
                 var probe = reopened.Document.HeifAvifProbe;
@@ -76,6 +84,7 @@ if (args.Length == 3)
             throw new InvalidDataException("Ultra HDR base/gain map decode failed.");
         Console.WriteLine($"PASS Ultra HDR {channelMode}: base + gain map + XMP + ISO");
     }
+    await ExportRegressionChecks.RunAsync(Path.Combine(directory, "ultrahdr-Rgb.jpg"), directory);
     foreach (var extension in new[] { ".heic", ".avif" })
     {
         foreach (var channelMode in Enum.GetValues<UltraHdrGainMapChannelMode>())

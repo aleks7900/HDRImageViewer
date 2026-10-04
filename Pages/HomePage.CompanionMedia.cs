@@ -1,4 +1,5 @@
 using HdrImageViewer.Models;
+using HdrImageViewer.Services;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using System.Security.Cryptography;
@@ -16,7 +17,7 @@ public sealed partial class HomePage
 {
     private async void LivePhotoButton_Click(object sender, RoutedEventArgs e)
     {
-        if (_isCompanionMediaPlaybackActive)
+        if (_isCompanionMediaPlaybackActive || _isCompanionMediaPreparing)
         {
             StopCompanionMediaPlayback(resetSource: true);
             return;
@@ -39,22 +40,32 @@ public sealed partial class HomePage
 
     private async Task PlayCompanionMediaAsync()
     {
-        var media = _currentDocument?.CompanionMedia;
+        var document = _currentDocument;
+        var media = document?.CompanionMedia;
         if (media is null || _livePhotoMediaPlayer is null)
         {
             return;
         }
 
+        var operation = _companionLoads.Begin();
+        var token = operation.Token;
+        _isCompanionMediaPreparing = true;
+        ToolTipService.SetToolTip(LivePhotoButton, "正在准备动态照片 · 点击取消");
         try
         {
-            var playbackPath = await ResolveCompanionMediaPlaybackPathAsync(media, _lifetime.Token);
+            var playbackPath = await ResolveCompanionMediaPlaybackPathAsync(media, token);
+            token.ThrowIfCancellationRequested();
+            if (!_companionLoads.IsCurrent(operation) || !ReferenceEquals(document, _currentDocument)) return;
             if (string.IsNullOrWhiteSpace(playbackPath) || !File.Exists(playbackPath))
             {
                 ViewModel.UpdateRenderStatus($"动态照片视频不可用: {media.DisplaySummary}");
                 return;
             }
 
-            _livePhotoMediaPlayer.Source = MediaSource.CreateFromUri(new Uri(playbackPath));
+            // Native media events carry no source generation. A new player per
+            // playback lets even callbacks delivered late identify their owner.
+            InitializeLivePhotoPlayer();
+            _livePhotoMediaPlayer!.Source = MediaSource.CreateFromUri(new Uri(playbackPath));
             _livePhotoMediaPlayer.IsMuted = ViewModel.IsCompanionMediaMuted;
             LivePhotoPlayer.Visibility = Visibility.Visible;
             _isCompanionMediaPlaybackActive = true;
@@ -66,15 +77,30 @@ public sealed partial class HomePage
         catch (OperationCanceledException)
         {
         }
-        catch (Exception ex)
+        catch (Exception ex) when (!token.IsCancellationRequested && _companionLoads.IsCurrent(operation))
         {
             StopCompanionMediaPlayback(resetSource: true);
             ViewModel.UpdateRenderStatus($"动态照片播放失败: {ex.GetType().Name}: {ex.Message}");
+        }
+        catch (Exception) when (token.IsCancellationRequested)
+        {
+        }
+        finally
+        {
+            if (_companionLoads.IsCurrent(operation))
+            {
+                _isCompanionMediaPreparing = false;
+                if (!_isCompanionMediaPlaybackActive)
+                    ToolTipService.SetToolTip(LivePhotoButton, ViewModel.CompanionMediaSummary);
+            }
+            _companionLoads.Complete(operation);
         }
     }
 
     private void StopCompanionMediaPlayback(bool resetSource = false, string? status = null)
     {
+        _companionLoads.CancelCurrent();
+        _isCompanionMediaPreparing = false;
         if (_livePhotoMediaPlayer is not null)
         {
             _livePhotoMediaPlayer.Pause();
@@ -101,8 +127,10 @@ public sealed partial class HomePage
 
     private void LivePhotoMediaPlayer_MediaOpened(MediaPlayer sender, object args)
     {
+        if (!ReferenceEquals(sender, _livePhotoMediaPlayer)) return;
         DispatcherQueue.TryEnqueue(() =>
         {
+            if (!_isCompanionMediaPlaybackActive || !ReferenceEquals(sender, _livePhotoMediaPlayer)) return;
             var session = sender.PlaybackSession;
             var size = session.NaturalVideoWidth > 0 && session.NaturalVideoHeight > 0
                 ? $"{session.NaturalVideoWidth}x{session.NaturalVideoHeight}"
@@ -117,16 +145,20 @@ public sealed partial class HomePage
 
     private void LivePhotoMediaPlayer_MediaEnded(MediaPlayer sender, object args)
     {
+        if (!ReferenceEquals(sender, _livePhotoMediaPlayer)) return;
         DispatcherQueue.TryEnqueue(() =>
         {
+            if (!_isCompanionMediaPlaybackActive || !ReferenceEquals(sender, _livePhotoMediaPlayer)) return;
             StopCompanionMediaPlayback(resetSource: true, status: "ended; source reset");
         });
     }
 
     private void LivePhotoMediaPlayer_MediaFailed(MediaPlayer sender, MediaPlayerFailedEventArgs args)
     {
+        if (!ReferenceEquals(sender, _livePhotoMediaPlayer)) return;
         DispatcherQueue.TryEnqueue(() =>
         {
+            if (!_isCompanionMediaPlaybackActive || !ReferenceEquals(sender, _livePhotoMediaPlayer)) return;
             StopCompanionMediaPlayback(resetSource: true);
             ViewModel.UpdateCompanionVideoStatus(CreateCompanionVideoStatus($"failed {args.Error}: {args.ErrorMessage}"));
             ViewModel.UpdateRenderStatus($"动态照片播放失败: {args.Error}: {args.ErrorMessage}");
@@ -186,7 +218,10 @@ public sealed partial class HomePage
             return targetPath;
         }
 
-        await CopyFileRangeAsync(media.Path, targetPath, offset, length, cancellationToken);
+        // A canceled extraction cannot expose a partial cache file to another play request.
+        using var transaction = new ExportFileTransaction(targetPath);
+        await CopyFileRangeAsync(media.Path, transaction.TemporaryPath, offset, length, cancellationToken);
+        transaction.Commit(cancellationToken);
         return targetPath;
     }
 

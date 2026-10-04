@@ -127,9 +127,8 @@ public sealed partial class D3D11HdrRenderPipeline : IHdrRenderPipeline, IDispos
     private GainMapShaderConstants _gainMapConstants;
     private HdrDisplayConfiguration _displayConfiguration = HdrDisplayConfiguration.Unknown;
     private Vector4? _renderImageLayout;
-    private bool _toneMapAnalysisDirty = true;
-    private Vector4 _cachedToneMapInput;
-    private Vector4 _cachedToneMapOutput;
+    private readonly ViewModeAnalysisCache<ToneMapModeState> _toneMapModeCache = new();
+    private string? _gainSampleStatsSummary;
     private bool _frameVerificationPending = true;
     private FrameAnalysis _lastFrameAnalysis = new(false, 0.0f, "frame verification pending");
 
@@ -242,6 +241,7 @@ public sealed partial class D3D11HdrRenderPipeline : IHdrRenderPipeline, IDispos
         _colorGamutMappingMode = gamutMappingMode;
         _displayConfiguration = displayConfiguration;
         InvalidateToneMapAnalysis();
+        _previewAnalysis.Invalidate();
         return true;
     }
 
@@ -544,6 +544,7 @@ public sealed partial class D3D11HdrRenderPipeline : IHdrRenderPipeline, IDispos
     public void Dispose()
     {
         _isDisposed = true;
+        _previewAnalysis.Dispose();
         DetachSwapChainFromPanel();
         ReleaseFrameAnalysisStagingTexture();
         ReleaseGainMapResources();
@@ -657,6 +658,10 @@ public sealed partial class D3D11HdrRenderPipeline : IHdrRenderPipeline, IDispos
                 _loadedGainMapMode = false;
                 _loadedDecodeMaxPixelSize = decodeMaxPixelSize;
                 LastRenderStatus = $"Base texture loaded{(wasPreloaded ? " from preload" : string.Empty)}: {bitmap.PixelWidth}x{bitmap.PixelHeight} via {bitmap.RenderEncodingSummary}";
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
             }
             catch (Exception ex)
             {
@@ -965,7 +970,6 @@ public sealed partial class D3D11HdrRenderPipeline : IHdrRenderPipeline, IDispos
         _context.RSSetViewport(0.0f, 0.0f, _pixelWidth, _pixelHeight, 0.0f, 1.0f);
         _context.IASetInputLayout(null);
         _context.IASetPrimitiveTopology(PrimitiveTopology.TriangleList);
-        UpdateGainMapConstantsBuffer();
         _context.VSSetShader(_gainMapVertexShader);
         _context.PSSetShader(_gainMapPixelShader);
         _context.PSSetShaderResources(0, [_primaryTextureView, _gainMapTextureView]);
@@ -1198,6 +1202,7 @@ public sealed partial class D3D11HdrRenderPipeline : IHdrRenderPipeline, IDispos
             throw new InvalidOperationException("D2D base graph has not been created.");
         }
 
+        _previewAnalysis.Invalidate();
         _d2dContext.UnitMode = UnitMode.Pixels;
         _d2dContext.BeginDraw();
         _d2dContext.Transform = Matrix3x2.Identity;
@@ -1215,6 +1220,7 @@ public sealed partial class D3D11HdrRenderPipeline : IHdrRenderPipeline, IDispos
             throw new InvalidOperationException("D2D color management graph has not been created.");
         }
 
+        _previewAnalysis.Invalidate();
         _d2dContext.UnitMode = UnitMode.Pixels;
         _d2dContext.BeginDraw();
         _d2dContext.Transform = Matrix3x2.Identity;
@@ -1444,7 +1450,6 @@ public sealed partial class D3D11HdrRenderPipeline : IHdrRenderPipeline, IDispos
         _context.RSSetViewport(0.0f, 0.0f, _pixelWidth, _pixelHeight, 0.0f, 1.0f);
         _context.IASetInputLayout(null);
         _context.IASetPrimitiveTopology(PrimitiveTopology.TriangleList);
-        UpdateGainMapConstantsBuffer();
         _context.VSSetShader(_gainMapVertexShader);
         _context.PSSetShader(_baseImagePixelShader);
         _context.PSSetShaderResource(0, _primaryTextureView);
@@ -1500,7 +1505,8 @@ public sealed partial class D3D11HdrRenderPipeline : IHdrRenderPipeline, IDispos
         _gainMapTextureView = null;
         _primaryTexture = null;
         _gainMapTexture = null;
-        AnalysisSnapshot = null;
+        ClearAnalysis();
+        _gainSampleStatsSummary = null;
         _primaryAnalysisSource = null;
         _gainMapAnalysisSource = null;
         _d2dFallbackStatus = null;
@@ -1548,4 +1554,7 @@ public sealed partial class D3D11HdrRenderPipeline : IHdrRenderPipeline, IDispos
         float AdaptiveTargetPeak,
         float FullFrameLimit,
         float GlobalScale);
+
+    private readonly record struct ToneMapModeState(
+        Vector4 Input, Vector4 Output, ToneMapAnalysis Analysis, bool Enabled);
 }

@@ -15,6 +15,7 @@ public sealed partial class HomePage
     private bool _updatingViewerTools;
     private bool _toolsRendering;
     private bool _toolsRenderPending;
+    private long _analysisRefreshVersion;
     private BatchExportWindow? _batchExportWindow;
 
     private void BatchExport_Click(object sender, RoutedEventArgs e)
@@ -29,7 +30,7 @@ public sealed partial class HomePage
 
     private void ViewerTools_Click(object sender, RoutedEventArgs e)
     {
-        if (InspectorPanel.Visibility != Visibility.Visible) ToggleCurrentFileInfo();
+        ShowInspectorForTools();
         InspectorSectionSelector.SelectedItem = InspectorAnalysisTab;
     }
 
@@ -48,6 +49,7 @@ public sealed partial class HomePage
 
     private void ResetViewerToolsForDocument()
     {
+        _analysisRefreshVersion++;
         _renderer.ClearAnalysis();
         _updatingViewerTools = true;
         ComparisonToggle.IsChecked = false;
@@ -187,11 +189,14 @@ public sealed partial class HomePage
         }
         RefreshAnalysisButton.IsEnabled = false;
         RefreshGamutButton.IsEnabled = false;
+        var refreshVersion = ++_analysisRefreshVersion;
         try
         {
-            _renderer.RequestAnalysis();
+            AnalysisSummary.Text = GamutSummaryText.Text = "正在分析当前画面…";
             await PresentViewerToolsAsync();
-            if (_renderer.AnalysisSnapshot is { } snapshot)
+            var snapshot = await _renderer.AnalyzeCurrentPreviewAsync(_lifetime.Token);
+            if (refreshVersion != _analysisRefreshVersion || _lifetime.IsCancellationRequested) return;
+            if (snapshot is not null && snapshot.Version == _renderer.PreviewVersion)
             {
                 AverageLuminanceText.Text = $"{snapshot.AverageNits:0.0} nits";
                 PeakLuminanceText.Text = $"{snapshot.PeakNits:0.0} nits";
@@ -204,12 +209,18 @@ public sealed partial class HomePage
             }
             else
             {
-                AnalysisSummary.Text = _renderer.AnalysisError ?? "画面尚未准备好，请重试。";
+                AnalysisSummary.Text = _renderer.AnalysisError ?? "画面已变化或尚未准备好，请刷新分析。";
                 GamutSummaryText.Text = AnalysisSummary.Text;
             }
             DrawHistogram();
             ClearChromaticitySample();
             DrawChromaticity();
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex)
+        {
+            if (refreshVersion == _analysisRefreshVersion)
+                AnalysisSummary.Text = GamutSummaryText.Text = ex.Message;
         }
         finally { RefreshAnalysisButton.IsEnabled = RefreshGamutButton.IsEnabled = true; }
     }

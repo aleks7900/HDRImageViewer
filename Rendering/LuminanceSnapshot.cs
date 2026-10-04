@@ -21,14 +21,18 @@ public sealed class LuminanceSnapshot
     public float PeakNits { get; }
     public int Count { get; }
 
-    public LuminanceSnapshot(int width, int height, byte[] pixels, Vector4 layout, long version, float sdrWhiteNits = 80)
+    public LuminanceSnapshot(int width, int height, byte[] pixels, Vector4 layout, long version,
+        float sdrWhiteNits = 80, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         if (width <= 0 || height <= 0 || pixels.Length != checked(width * height * 8))
             throw new ArgumentException("Invalid FP16 preview dimensions.");
         Width = width; Height = height; _pixels = pixels; _layout = layout; Version = version;
         SdrWhiteNits = float.IsFinite(sdrWhiteNits) && sdrWhiteNits > 0 ? sdrWhiteNits : 80;
         double sum = 0;
         for (var y = 0; y < height; y++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
             for (var x = 0; x < width; x++)
             {
                 if (Sample(x, y) is not { } sample) continue;
@@ -46,6 +50,7 @@ public sealed class LuminanceSnapshot
                 PeakNits = Math.Max(PeakNits, nits);
                 Count++;
             }
+        }
         AverageNits = Count == 0 ? 0 : sum / Count;
     }
 

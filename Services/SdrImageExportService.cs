@@ -12,17 +12,18 @@ internal static class SdrImageExportService
         if (document.HasRenderableGainMap)
         {
             var inputs = await GainMapRenderInputDecoder.DecodeRenderInputsAsync(document, null, cancellationToken);
-            width = inputs.Primary.PixelWidth; height = inputs.Primary.PixelHeight;
-            pixels = await Task.Run(() => PhotoThumbnailService.ConvertGainMapToBgra8(inputs, cancellationToken), cancellationToken);
-            (pixels, width, height) = BgraOrientation.Apply(pixels, width, height, (int)inputs.Constants.Orientation.X, cancellationToken);
+            var orientation = new ExifOrientationTransform(
+                inputs.Primary.PixelWidth, inputs.Primary.PixelHeight, (int)inputs.Constants.Orientation.X);
+            width = orientation.Width; height = orientation.Height;
+            pixels = await Task.Run(() => ThumbnailPixelConverter.ConvertGainMapToBgra8(inputs, cancellationToken), cancellationToken);
         }
         else
         {
             var bitmap = await BitmapDecodeService.DecodeDocumentForHdrExportAsync(document, cancellationToken);
             width = bitmap.PixelWidth; height = bitmap.PixelHeight;
             pixels = await Task.Run(() => bitmap.IsHdrEncoded
-                ? PhotoThumbnailService.ConvertHdrToBgra8(bitmap, cancellationToken)
-                : PhotoThumbnailService.ConvertSdrToBgra8(bitmap, cancellationToken), cancellationToken);
+                ? ThumbnailPixelConverter.ConvertHdrToBgra8(bitmap, cancellationToken)
+                : ThumbnailPixelConverter.ConvertSdrToBgra8(bitmap, cancellationToken), cancellationToken);
         }
         using var transaction = new ExportFileTransaction(destination);
         await using (var stream = new FileStream(transaction.TemporaryPath, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None))
