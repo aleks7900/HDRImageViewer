@@ -160,9 +160,7 @@ public static class DecoderCatalog
         var decoder = hasRenderableGainMap
             ? probe.HasGainMapAuxiliary
                 ? $"Windows Imaging {codecLabel} 基础解码 + HEIF auxiliary gain-map 解码"
-                : IsAvifExtension(extension)
-                    ? $"Windows Imaging {codecLabel} 基础解码 + avifgainmaputil ISO gain-map 提取"
-                    : $"Windows Imaging {codecLabel} 基础解码 + HEIF tmap item 解码"
+                : $"libheif {codecLabel} 底图 + ISO tmap gain-map 解码"
             : probe.HasGainMapSignal
                 ? $"Windows Imaging {codecLabel} 解码器 + HEIF/AVIF gain-map 元数据探测"
             : $"Windows Imaging {codecLabel} 解码器 + HEIF/AVIF 元数据探测";

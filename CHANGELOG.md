@@ -1,6 +1,28 @@
 # Changelog
 
-## Unreleased
+## 1.0.35.0 - 2026-10-04
+
+- Folder stepping now skips files that fail to open instead of repeatedly retrying the same unsupported or corrupt image. Filmstrip previews prefer direct decoding over decorated shell thumbnails and correct provisional aspect ratios when final pixels arrive.
+- Unified viewer motion: panels enter with cubic deceleration and leave along the same path with cubic acceleration; interrupted motion resumes at its current position. Zoom follows rendering frames and elapsed time, including fit/fill/1:1 actions, and keeps swap-chain dimensions stable during gestures. Custom motion follows the system animation setting.
+- Kept the toolbar visible while hovered or keyboard-focused, stabilized filmstrip proportions before refined thumbnails arrive, and prepared decoded images before replacing the visible document. Image handoff no longer explicitly redraws the old image using the next image's layout.
+
+## 1.0.34.0 - 2026-10-04
+
+- Fixed HDR filmstrip appearance: gain-map images now preview their authored SDR base instead of reconstructing maximum HDR gain and applying another fixed ACES curve. Single-layer HDR thumbnails use the viewer's SDR white reference and compress highlights with a shared RGB scale, preserving midtones and color ratios.
+- Fixed SDR JPEG XL thumbnails and transparent thumbnail pixels, including HDR JPEG XL. Linear floating-point JPEG XL now retains extended-range pixels through a float decode path instead of being decoded as SDR. Added real-file pixel comparisons against an independently decoded SDR base and equivalent PQ/HLG/linear samples.
+- Kept the filmstrip and toolbar on one row, with thumbnails sized to the available column. Hidden filmstrips stop decoding and release their images; refreshing a folder keeps provisional previews, and failed items are not decoded repeatedly while they remain in the retained window.
+- Corrected EXIF orientation handling for HDR/SDR exports and Gain Map crops. Linear TIFF/EXR exports avoid unused PQ statistics and preserve existing destinations on cancellation.
+- Moved preview analysis onto cancellable background work with stale-result protection, and cached tone-map analysis separately by view mode.
+- Hardened Live Photo preparation and image navigation against stale asynchronous results; canceled video extraction no longer leaves a partial cached file.
+
+## 1.0.33.0 - 2026-10-02
+
+- Added HEIC / AVIF ISO Gain Map export for single images, crops, and batch queues, with monochrome/RGB maps and verified HDR readback.
+- Fixed odd-dimension ISO Gain Map decoding and sRGB transfer tagging; automatic SDR bases are now correctly labeled Display P3.
+- Fixed the ImageMagick EXR fallback applying an extra gamma conversion to scene-linear samples.
+- Updated the pinned x64 codec stack to libultrahdr 2.0.2, libjxl 0.12.0, libavif 1.4.2, libheif 1.23.5, libde265 1.1.3 and OpenEXR 3.5.1, with updated supporting libraries and x265 4.3 multilib. Ultra HDR retains JPEG output with both XMP and ISO metadata.
+- Added checksum-verified codec restoration/build scripts, runtime dependency manifests and rollback backups. CI and release builds use the same codec lock. Native runtime copies no longer keep older executables simply because their file timestamps are newer.
+- Shared the assembly's native resolver between EXR and JPEG XL, supporting both MSVC and MinGW JPEG XL DLL names. Added application-level PQ/HLG export/decode and monochrome/RGB Ultra HDR round-trip checks.
 
 ## 1.0.32.0 - 2026-09-23
 

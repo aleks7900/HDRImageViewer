@@ -19,21 +19,8 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
-      - name: Cache vcpkg binaries
-        uses: actions/cache@v4
-        with:
-          path: ${{ runner.temp }}\vcpkg-binary-cache
-          key: vcpkg-${{ runner.os }}-openexr-${{ hashFiles('native/HdrImageViewer.Native/CMakeLists.txt') }}
-          restore-keys: |
-            vcpkg-${{ runner.os }}-openexr-
-
-      - name: Build native OpenEXR bridge (x64)
-        shell: pwsh
-        env:
-          VCPKG_DEFAULT_BINARY_CACHE: ${{ runner.temp }}\vcpkg-binary-cache
-        run: |
-          New-Item -ItemType Directory -Force $env:VCPKG_DEFAULT_BINARY_CACHE | Out-Null
-          .\eng\build-native.ps1 -Platforms x64 -Configuration Release
+      - name: Build pinned codecs and OpenEXR bridge (x64)
+        uses: ./.github/actions/build-codecs
 
       - name: Build app (x64)
         run: dotnet build .\HdrImageViewer.csproj -p:Platform=x64 -c Release --nologo

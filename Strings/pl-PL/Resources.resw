@@ -779,7 +779,7 @@
     <value>Otwarto {0} obrazów ze skojarzenia plików systemowych</value>
   </data>
   <data name="StatusOpenFailedFormat" xml:space="preserve">
-    <value>Błąd otwierania: {0}: {1}</value>
+    <value>Nie udało się otworzyć {0}: {1}: {2}</value>
   </data>
   <data name="StatusLoadingFullResolution" xml:space="preserve">
     <value>Wczytywanie pełnej rozdzielczości do widoku 1:1...</value>
@@ -993,19 +993,19 @@ Liniowy scRGB {3}, {4}, {5}</value>
     <value>Błąd bezstratnego przycięcia Gain Map: {0}</value>
   </data>
   <data name="StatusUltraHdrConvertUnavailable" xml:space="preserve">
-    <value>Konwersja na Ultra HDR niedostępna: brak rekonstruowalnych danych gain-map lub HDR.</value>
+    <value>Konwersja do Gain Map HDR niedostępna: bieżący plik nie zawiera możliwych do zrekonstruowania danych gain-map ani jednowarstwowych HDR.</value>
   </data>
   <data name="StatusGeneratingUltraHdrFormat" xml:space="preserve">
     <value>Generowanie Ultra HDR: {0}</value>
   </data>
   <data name="StatusEncodingGainMapFormat" xml:space="preserve">
-    <value>Kodowanie JPEG z mapą wzmocnienia {0}</value>
+    <value>Kodowanie {0} Gain Map</value>
   </data>
   <data name="StatusExportedUltraHdrFormat" xml:space="preserve">
-    <value>Przekonwertowano na Ultra HDR: {0}; {1}</value>
+    <value>Przekonwertowano do Gain Map HDR: {0}; {1}</value>
   </data>
   <data name="StatusUltraHdrConvertFailedFormat" xml:space="preserve">
-    <value>Błąd konwersji na Ultra HDR: {0}</value>
+    <value>Konwersja do Gain Map HDR nie powiodła się: {0}</value>
   </data>
   <data name="StatusGeneratingSingleLayerHdrFormat" xml:space="preserve">
     <value>Generowanie jednowarstwowego HDR {0}: {1}</value>
@@ -1077,7 +1077,7 @@ Liniowy scRGB {3}, {4}, {5}</value>
     <value>Błąd zapisu jako HDR: {0}</value>
   </data>
   <data name="SaveAsModeUltraHdrConvert" xml:space="preserve">
-    <value>Konwertuj na Ultra HDR / gain-map JPEG</value>
+    <value>Konwertuj do Gain Map HDR</value>
   </data>
   <data name="SaveAsModeGainMapPreserve" xml:space="preserve">
     <value>Bezstratny zapis jako Gain Map</value>
@@ -1089,7 +1089,7 @@ Liniowy scRGB {3}, {4}, {5}</value>
     <value>Tryb eksportu: bezstratne przycięcie Gain Map z zachowaniem parametrów mapowania</value>
   </data>
   <data name="StatusCropModeUltraHdrConvertFormat" xml:space="preserve">
-    <value>Tryb eksportu: konwersja na Ultra HDR, ponowne generowanie bazy SDR, mapy {0} i metadanych</value>
+    <value>Tryb eksportu: Konwertuj do Gain Map HDR, ponowne generowanie bazy SDR, gainmap {0} i metadanych ze zrekonstruowanego HDR</value>
   </data>
   <data name="StatusCropModeSingleLayerHdrFormat" xml:space="preserve">
     <value>Tryb eksportu: konwersja na jednowarstwowy HDR, cel {0}; JXR zapisuje scRGB, JXL/AVIF/HEIF metadane transferu</value>
@@ -1140,7 +1140,7 @@ Liniowy scRGB {3}, {4}, {5}</value>
     <value>Bezstratne przycięcie Gain Map nie jest połączone z zapisywalnym backendem: wymaga scenariusza 4 libultrahdr do przepakowania bazy + mapy. Obszar {0},{1} {2}x{3} obliczony; plik nie został utworzony. {4}</value>
   </data>
   <data name="StatusUltraHdrNoBackendFormat" xml:space="preserve">
-    <value>Konwersja na Ultra HDR nie jest połączona z zapisywalnym backendem: {0} wymaga libultrahdr/libavif/libheif do zapisu metadanych. Obszar {1},{2} {3}x{4} obliczony; plik nie został utworzony. {5}</value>
+    <value>Konwersja do Gain Map HDR nie ma dostępnego modułu zapisu: {0} wymaga libultrahdr/libavif/libheif do zapisu metadanych gain-map. Obszar kadrowania {1},{2} {3}x{4} obliczony; okno zapisu nie zostało wyświetlone, plik nie został wygenerowany. {5}</value>
   </data>
   <data name="StatusSingleLayerHdrNoBackendFormat" xml:space="preserve">
     <value>Przycięcie jednowarstwowego HDR nie jest połączone z zapisywalnym backendem: wymaga natywnych narzędzi libjxl/libavif/libheif. Obszar {0},{1} {2}x{3} obliczony; plik nie został utworzony. {4}</value>
@@ -1204,5 +1204,38 @@ Liniowy scRGB {3}, {4}, {5}</value>
   </data>
   <data name="ExportFileEmptyNotReplaced" xml:space="preserve">
     <value>Wyeksportowany plik jest pusty; plik docelowy nie został zastąpiony.</value>
+  </data>
+  <data name="BatchFormatGainMapHeic" xml:space="preserve">
+    <value>HEIC · Gain Map</value>
+  </data>
+  <data name="BatchFormatGainMapAvif" xml:space="preserve">
+    <value>AVIF · Gain Map</value>
+  </data>
+  <data name="CropUltraHdrBaseGamutP3" xml:space="preserve">
+    <value>Base P3 · Auto</value>
+  </data>
+  <data name="AnalysisAnalyzingPreview" xml:space="preserve">
+    <value>Analizowanie bieżącego obrazu…</value>
+  </data>
+  <data name="SaveAsGamutDisplayP3AutoToneMapping" xml:space="preserve">
+    <value>Display P3 (automatyczne mapowanie tonów)</value>
+  </data>
+  <data name="InspectorSectionSelectorName" xml:space="preserve">
+    <value>Panel szczegółów i analizy</value>
+  </data>
+  <data name="ExceptionImageDisplayAreaNotReady" xml:space="preserve">
+    <value>Obszar wyświetlania obrazu nie jest jeszcze gotowy.</value>
+  </data>
+  <data name="ExceptionImageDisplayAreaInvalidSize" xml:space="preserve">
+    <value>Nieprawidłowy rozmiar obszaru wyświetlania obrazu.</value>
+  </data>
+  <data name="LivePhotoPreparing" xml:space="preserve">
+    <value>Przygotowywanie Live Photo · Kliknij, aby anulować</value>
+  </data>
+  <data name="StatusSkippedUnopenableFilesFormat" xml:space="preserve">
+    <value>Pominięto pliki, których nie można otworzyć: {0}</value>
+  </data>
+  <data name="FilmstripThumbnailLoadErrorFormat" xml:space="preserve">
+    <value>{0} · Podgląd niedostępny, kliknij, aby otworzyć</value>
   </data>
 </root>

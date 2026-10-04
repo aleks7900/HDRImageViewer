@@ -41,6 +41,8 @@ public sealed partial class BatchExportWindow : Window
         BatchFormatItemHdrTiff.Content = Localization.GetString("BatchFormatHdrTiff");
         BatchFormatItemOpenExr.Content = Localization.GetString("BatchFormatOpenExr");
         BatchFormatItemOriginal.Content = Localization.GetString("BatchFormatOriginal");
+        BatchFormatItemGainMapHeic.Content = Localization.GetString("BatchFormatGainMapHeic");
+        BatchFormatItemGainMapAvif.Content = Localization.GetString("BatchFormatGainMapAvif");
 
         var scale = GetDpiForWindow(Microsoft.UI.Win32Interop.GetWindowFromWindowId(AppWindow.Id)) / 96.0;
         AppWindow.Resize(new SizeInt32((int)(880 * scale), (int)(720 * scale)));
@@ -67,9 +69,12 @@ public sealed partial class BatchExportWindow : Window
         try
         {
             var result = await new FolderPicker(AppWindow.Id).PickSingleFolderAsync();
-            if (result is not null) { _directory = result.Path; FolderText.Text = Path.GetFileName(result.Path.TrimEnd(Path.DirectorySeparatorChar));
+            if (result is not null)
+            {
+                _directory = result.Path; FolderText.Text = Path.GetFileName(result.Path.TrimEnd(Path.DirectorySeparatorChar));
                 Microsoft.UI.Xaml.Controls.ToolTipService.SetToolTip(FolderButton, result.Path);
-                UpdateSummary(); }
+                UpdateSummary();
+            }
         }
         catch (Exception ex) { SummaryText.Text = ex.Message; }
     }
@@ -80,7 +85,7 @@ public sealed partial class BatchExportWindow : Window
         FormatNoteText.Text = FormatSelector.SelectedIndex switch
         {
             0 or 1 => Localization.GetString("BatchFormatNoteSdr"),
-            2 => Localization.GetString("BatchFormatNoteGainMap"),
+            2 or 8 or 9 => Localization.GetString("BatchFormatNoteGainMap"),
             3 => Localization.GetString("BatchFormatNotePq"),
             4 => Localization.GetString("BatchFormatNoteHlg"),
             5 or 6 => Localization.GetString("BatchFormatNoteFloat"),

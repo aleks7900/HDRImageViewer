@@ -84,6 +84,7 @@ public sealed partial class D3D11HdrRenderPipeline
 
     private string BuildGainSampleStats()
     {
+        if (_gainSampleStatsSummary is not null) return _gainSampleStatsSummary;
         if (_gainMapAnalysisSource is not { Samples.Length: > 0 } analysis)
         {
             return string.Empty;
@@ -106,7 +107,7 @@ public sealed partial class D3D11HdrRenderPipeline
                 return luma[idx];
             }
 
-            return $", gain sample min/p50/p99/max {luma[0]:0.###}/{Percentile(0.5f):0.###}/{Percentile(0.99f):0.###}/{luma[samples.Length - 1]:0.###}";
+            return _gainSampleStatsSummary = $", gain sample min/p50/p99/max {luma[0]:0.###}/{Percentile(0.5f):0.###}/{Percentile(0.99f):0.###}/{luma[samples.Length - 1]:0.###}";
         }
         finally
         {

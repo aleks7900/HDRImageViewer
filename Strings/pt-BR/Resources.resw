@@ -710,7 +710,7 @@
     <value>Cancelar exportação</value>
   </data>
   <data name="DeleteDialogTitleFormat" xml:space="preserve">
-    <value>Excluir &quot;{0}&quot;?</value>
+    <value>Excluir "{0}"?</value>
   </data>
   <data name="DeleteDialogContent.Text" xml:space="preserve">
     <value>Este arquivo será movido para a Lixeira.</value>
@@ -779,7 +779,7 @@
     <value>{0} imagens abertas pela associação do sistema</value>
   </data>
   <data name="StatusOpenFailedFormat" xml:space="preserve">
-    <value>Falha ao abrir: {0}: {1}</value>
+    <value>Falha ao abrir {0}: {1}: {2}</value>
   </data>
   <data name="StatusLoadingFullResolution" xml:space="preserve">
     <value>Carregando resolução total para exibição 1:1...</value>
@@ -993,19 +993,19 @@ scRGB linear {3}, {4}, {5}</value>
     <value>Falha no corte fiel de Gain Map: {0}</value>
   </data>
   <data name="StatusUltraHdrConvertUnavailable" xml:space="preserve">
-    <value>Converter para Ultra HDR indisponível: o arquivo não possui dados de gain map ou HDR reconstruíveis.</value>
+    <value>A conversão para Gain Map HDR não está disponível: o arquivo atual não possui gain-map reconstruível ou dados HDR de camada única.</value>
   </data>
   <data name="StatusGeneratingUltraHdrFormat" xml:space="preserve">
     <value>Gerando Ultra HDR: {0}</value>
   </data>
   <data name="StatusEncodingGainMapFormat" xml:space="preserve">
-    <value>Codificando JPEG de gain map {0}</value>
+    <value>Codificando {0} Gain Map</value>
   </data>
   <data name="StatusExportedUltraHdrFormat" xml:space="preserve">
-    <value>Convertido para Ultra HDR: {0}; {1}</value>
+    <value>Convertido para Gain Map HDR: {0}; {1}</value>
   </data>
   <data name="StatusUltraHdrConvertFailedFormat" xml:space="preserve">
-    <value>Falha ao converter para Ultra HDR: {0}</value>
+    <value>Falha ao converter para Gain Map HDR: {0}</value>
   </data>
   <data name="StatusGeneratingSingleLayerHdrFormat" xml:space="preserve">
     <value>Gerando HDR de camada única {0}: {1}</value>
@@ -1077,7 +1077,7 @@ scRGB linear {3}, {4}, {5}</value>
     <value>Falha ao salvar como HDR: {0}</value>
   </data>
   <data name="SaveAsModeUltraHdrConvert" xml:space="preserve">
-    <value>Converter para JPEG Ultra HDR / gain map</value>
+    <value>Converter para Gain Map HDR</value>
   </data>
   <data name="SaveAsModeGainMapPreserve" xml:space="preserve">
     <value>Salvar fiel de Gain Map</value>
@@ -1089,7 +1089,7 @@ scRGB linear {3}, {4}, {5}</value>
     <value>Modo de exportação: corte fiel de Gain Map mantendo os parâmetros de mapeamento</value>
   </data>
   <data name="StatusCropModeUltraHdrConvertFormat" xml:space="preserve">
-    <value>Modo de exportação: converter para Ultra HDR gerando base SDR, gain map {0} e metadados</value>
+    <value>Modo de exportação: Converter para Gain Map HDR, regenerando base SDR, gainmap {0} e metadados a partir do HDR reconstruído</value>
   </data>
   <data name="StatusCropModeSingleLayerHdrFormat" xml:space="preserve">
     <value>Modo de exportação: conversão para HDR de camada única, destino {0}; JXR grava scRGB, JXL/AVIF/HEIF gravam metadados</value>
@@ -1140,7 +1140,7 @@ scRGB linear {3}, {4}, {5}</value>
     <value>Corte fiel de Gain Map não conectado a um backend gravável: requer libultrahdr cenário 4 para reempacotar base + gain map. Região {0},{1} {2}x{3} calculada; nenhum arquivo gerado. {4}</value>
   </data>
   <data name="StatusUltraHdrNoBackendFormat" xml:space="preserve">
-    <value>Converter para Ultra HDR não conectado a um backend gravável: {0} requer libultrahdr/libavif/libheif para gravar metadados de gain map. Região {1},{2} {3}x{4} calculada; nenhum arquivo gerado. {5}</value>
+    <value>A conversão para Gain Map HDR não possui backend gravável: {0} requer libultrahdr/libavif/libheif para gravar metadados gain-map. Região de corte {1},{2} {3}x{4} calculada; caixa de salvamento não exibida, nenhum arquivo gerado. {5}</value>
   </data>
   <data name="StatusSingleLayerHdrNoBackendFormat" xml:space="preserve">
     <value>Corte de HDR de camada única não conectado a um backend gravável: requer ferramentas nativas libjxl/libavif/libheif. Região {0},{1} {2}x{3} calculada; nenhum arquivo gerado. {4}</value>
@@ -1204,5 +1204,38 @@ scRGB linear {3}, {4}, {5}</value>
   </data>
   <data name="ExportFileEmptyNotReplaced" xml:space="preserve">
     <value>O arquivo exportado está vazio; o arquivo de destino não foi substituído.</value>
+  </data>
+  <data name="BatchFormatGainMapHeic" xml:space="preserve">
+    <value>HEIC · Gain Map</value>
+  </data>
+  <data name="BatchFormatGainMapAvif" xml:space="preserve">
+    <value>AVIF · Gain Map</value>
+  </data>
+  <data name="CropUltraHdrBaseGamutP3" xml:space="preserve">
+    <value>Base P3 · Automático</value>
+  </data>
+  <data name="AnalysisAnalyzingPreview" xml:space="preserve">
+    <value>Analisando a imagem atual…</value>
+  </data>
+  <data name="SaveAsGamutDisplayP3AutoToneMapping" xml:space="preserve">
+    <value>Display P3 (mapeamento de tom automático)</value>
+  </data>
+  <data name="InspectorSectionSelectorName" xml:space="preserve">
+    <value>Painel de detalhes e análise</value>
+  </data>
+  <data name="ExceptionImageDisplayAreaNotReady" xml:space="preserve">
+    <value>A área de exibição da imagem ainda não está pronta.</value>
+  </data>
+  <data name="ExceptionImageDisplayAreaInvalidSize" xml:space="preserve">
+    <value>Tamanho da área de exibição da imagem inválido.</value>
+  </data>
+  <data name="LivePhotoPreparing" xml:space="preserve">
+    <value>Preparando Live Photo · Clique para cancelar</value>
+  </data>
+  <data name="StatusSkippedUnopenableFilesFormat" xml:space="preserve">
+    <value>Arquivos que não puderam ser abertos foram ignorados: {0}</value>
+  </data>
+  <data name="FilmstripThumbnailLoadErrorFormat" xml:space="preserve">
+    <value>{0} · Prévia indisponível, clique para abrir</value>
   </data>
 </root>

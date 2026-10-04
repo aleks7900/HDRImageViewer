@@ -24,8 +24,8 @@ public sealed class JxlNativeDecoderParityTests
 
     private static string? MissingDependency() =>
         !RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "Requires Windows." :
-        FindJxlFixtures().Count == 0 || FindTool("djxl.exe") is null || FindTool("jxl.dll") is null
-            ? "Requires HDR JXL fixtures, djxl.exe and jxl.dll." : null;
+        FindJxlFixtures().Count == 0 || FindTool("djxl.exe") is null || NativeToolLocator.FindFirstTool("libjxl.dll", "jxl.dll") is null
+            ? "Requires HDR JXL fixtures, djxl.exe and a libjxl DLL." : null;
 
     [JxlFact]
     public async Task InProcessDecodeMatchesDjxlPpm16ForHdrFixtures()

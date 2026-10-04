@@ -779,7 +779,7 @@
     <value>システムファイル関連付けから {0} 枚の画像を開きました</value>
   </data>
   <data name="StatusOpenFailedFormat" xml:space="preserve">
-    <value>画像を開けませんでした: {0}: {1}</value>
+    <value>{0} を開けませんでした: {1}: {2}</value>
   </data>
   <data name="StatusLoadingFullResolution" xml:space="preserve">
     <value>1:1 表示のために元の解像度を読み込み中...</value>
@@ -993,19 +993,19 @@
     <value>ゲインマップ高忠実度トリミングに失敗しました: {0}</value>
   </data>
   <data name="StatusUltraHdrConvertUnavailable" xml:space="preserve">
-    <value>Ultra HDR への変換を利用できません: 再構築可能なゲインマップまたは単層 HDR データがありません。</value>
+    <value>Gain Map HDR への変換は利用できません: 現在のファイルには再構築可能な gain-map または単層 HDR データがありません。</value>
   </data>
   <data name="StatusGeneratingUltraHdrFormat" xml:space="preserve">
     <value>Ultra HDR を生成中: {0}</value>
   </data>
   <data name="StatusEncodingGainMapFormat" xml:space="preserve">
-    <value>{0} ゲインマップ JPEG をエンコード中</value>
+    <value>{0} Gain Map をエンコード中</value>
   </data>
   <data name="StatusExportedUltraHdrFormat" xml:space="preserve">
-    <value>Ultra HDR に変換しました: {0}; {1}</value>
+    <value>Gain Map HDR に変換完了: {0}; {1}</value>
   </data>
   <data name="StatusUltraHdrConvertFailedFormat" xml:space="preserve">
-    <value>Ultra HDR への変換に失敗しました: {0}</value>
+    <value>Gain Map HDR への変換に失敗しました: {0}</value>
   </data>
   <data name="StatusGeneratingSingleLayerHdrFormat" xml:space="preserve">
     <value>単層 HDR {0} を生成中: {1}</value>
@@ -1077,7 +1077,7 @@
     <value>HDR としての保存に失敗しました: {0}</value>
   </data>
   <data name="SaveAsModeUltraHdrConvert" xml:space="preserve">
-    <value>Ultra HDR / ゲインマップ JPEG に変換</value>
+    <value>Gain Map HDR に変換</value>
   </data>
   <data name="SaveAsModeGainMapPreserve" xml:space="preserve">
     <value>ゲインマップ高忠実度保存</value>
@@ -1089,7 +1089,7 @@
     <value>エクスポートモード: ゲインマップ高忠実度トリミング（マッピングパラメータを保持）</value>
   </data>
   <data name="StatusCropModeUltraHdrConvertFormat" xml:space="preserve">
-    <value>エクスポートモード: Ultra HDR に変換（SDR base、{0} ゲインマップ、メタデータを再生成）</value>
+    <value>エクスポートモード: Gain Map HDR に変換、再構築された HDR から SDR ベース、{0} gainmap およびメタデータを再生成</value>
   </data>
   <data name="StatusCropModeSingleLayerHdrFormat" xml:space="preserve">
     <value>エクスポートモード: 単層 HDR 変換、目標 {0}；JXR は scRGB、JXL/AVIF/HEIF は対応する転送メタデータを書き込み</value>
@@ -1140,7 +1140,7 @@
     <value>ゲインマップ高忠実度トリミングは書き込み可能なバックエンドに接続されていません: base + gain map の再パッケージ化に libultrahdr シナリオ 4 が必要です。領域 {0},{1} {2}x{3} を計算済み。ファイルは未生成です。{4}</value>
   </data>
   <data name="StatusUltraHdrNoBackendFormat" xml:space="preserve">
-    <value>Ultra HDR への変換は書き込み可能なバックエンドに接続されていません: {0} にはゲインマップメタデータを書き出すための libultrahdr/libavif/libheif が必要です。領域 {1},{2} {3}x{4} を計算済み。ファイルは未生成です。{5}</value>
+    <value>Gain Map HDR への変換には書き込み可能なバックエンドがありません: {0} は gain-map メタデータを書き出すために libultrahdr/libavif/libheif を必要とします。トリミング領域 {1},{2} {3}x{4} を計算しました。保存ダイアログは表示されず、ファイルも生成されませんでした。{5}</value>
   </data>
   <data name="StatusSingleLayerHdrNoBackendFormat" xml:space="preserve">
     <value>単層 HDR トリミングは書き込み可能なバックエンドに接続されていません: ネイティブの libjxl/libavif/libheif ツールが必要です。領域 {0},{1} {2}x{3} を計算済み。ファイルは未生成です。{4}</value>
@@ -1204,5 +1204,38 @@
   </data>
   <data name="ExportFileEmptyNotReplaced" xml:space="preserve">
     <value>エクスポートされたファイルが空です。ターゲットファイルは置換されませんでした。</value>
+  </data>
+  <data name="BatchFormatGainMapHeic" xml:space="preserve">
+    <value>HEIC · Gain Map</value>
+  </data>
+  <data name="BatchFormatGainMapAvif" xml:space="preserve">
+    <value>AVIF · Gain Map</value>
+  </data>
+  <data name="CropUltraHdrBaseGamutP3" xml:space="preserve">
+    <value>Base P3 · 自動</value>
+  </data>
+  <data name="AnalysisAnalyzingPreview" xml:space="preserve">
+    <value>現在の画像を分析中…</value>
+  </data>
+  <data name="SaveAsGamutDisplayP3AutoToneMapping" xml:space="preserve">
+    <value>Display P3 (自動トーンマッピング)</value>
+  </data>
+  <data name="InspectorSectionSelectorName" xml:space="preserve">
+    <value>詳細と分析パネル</value>
+  </data>
+  <data name="ExceptionImageDisplayAreaNotReady" xml:space="preserve">
+    <value>画像表示領域がまだ準備できていません。</value>
+  </data>
+  <data name="ExceptionImageDisplayAreaInvalidSize" xml:space="preserve">
+    <value>画像表示領域のサイズが無効です。</value>
+  </data>
+  <data name="LivePhotoPreparing" xml:space="preserve">
+    <value>Live Photos を準備中 · クリックしてキャンセル</value>
+  </data>
+  <data name="StatusSkippedUnopenableFilesFormat" xml:space="preserve">
+    <value>開けないファイルをスキップしました: {0}</value>
+  </data>
+  <data name="FilmstripThumbnailLoadErrorFormat" xml:space="preserve">
+    <value>{0} · プレビューを利用できません。クリックして開きます</value>
   </data>
 </root>

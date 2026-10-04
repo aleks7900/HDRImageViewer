@@ -27,6 +27,28 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Include="..\..\external\encoders\x64\**\*.*"
+          Link="encoders\x64\%(RecursiveDir)%(Filename)%(Extension)"
+          CopyToOutputDirectory="Always" />
+    <None Include="..\..\native\HdrImageViewer.Native\build\x64\Release\*.dll"
+          Link="%(Filename)%(Extension)" CopyToOutputDirectory="Always" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\Presentation\ViewerMotion.cs" Link="ViewerMotion.cs" />
+    <Compile Include="..\..\Presentation\FilmstripPreviewGeometry.cs" Link="FilmstripPreviewGeometry.cs" />
+    <Compile Include="..\..\Services\ExifOrientationTransform.cs" Link="ExifOrientationTransform.cs" />
+    <Compile Include="..\..\Services\BitmapPreviewResampler.cs" Link="BitmapPreviewResampler.cs" />
+    <Compile Include="..\..\Services\ThumbnailPixelConverter.cs" Link="ThumbnailPixelConverter.cs" />
+    <Compile Include="..\..\Services\ThumbnailDecodePolicy.cs" Link="ThumbnailDecodePolicy.cs" />
+    <Compile Include="..\..\Services\GainMapRenderInputs.cs" Link="GainMapRenderInputs.cs" />
+    <Compile Include="..\..\Rendering\PreviewAnalysisController.cs" Link="PreviewAnalysisController.cs" />
+    <Compile Include="..\..\Rendering\ViewModeAnalysisCache.cs" Link="ViewModeAnalysisCache.cs" />
+    <Compile Include="..\..\Rendering\GainmapViewMode.cs" Link="GainmapViewMode.cs" />
+    <Compile Include="..\..\Presentation\FilmstripThumbnailWindow.cs" Link="FilmstripThumbnailWindow.cs" />
+    <Compile Include="..\..\Presentation\RetainedThumbnailLoads.cs" Link="RetainedThumbnailLoads.cs" />
+    <Compile Include="..\..\Presentation\FilmstripThumbnailControllerCore.cs" Link="FilmstripThumbnailControllerCore.cs" />
+    <Compile Include="..\..\Presentation\ImageNavigationContext.cs" Link="ImageNavigationContext.cs" />
     <Compile Include="..\..\Services\ExportFileTransaction.cs" Link="ExportFileTransaction.cs" />
     <Compile Include="..\..\Rendering\ChromaticityDiagram.cs" Link="ChromaticityDiagram.cs" />
     <EmbeddedResource Include="..\..\Rendering\Data\CIE_xyz_1931_2deg.csv" LogicalName="HdrImageViewer.CIE1931" />
@@ -73,6 +95,7 @@
              Link="JxlNativeDecoder.cs" />
     <Compile Include="..\..\Services\NativeExrDecoder.cs"
              Link="NativeExrDecoder.cs" />
+    <Compile Include="..\..\Services\NativeCodecLibraryResolver.cs" Link="NativeCodecLibraryResolver.cs" />
     <Compile Include="..\..\Services\JxlProbe.cs"
              Link="JxlProbe.cs" />
     <Compile Include="..\..\Services\NativeToolLocator.cs"

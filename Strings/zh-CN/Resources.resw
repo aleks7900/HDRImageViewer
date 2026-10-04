@@ -779,7 +779,7 @@
     <value>已从系统文件关联打开 {0} 张图片</value>
   </data>
   <data name="StatusOpenFailedFormat" xml:space="preserve">
-    <value>打开失败: {0}: {1}</value>
+    <value>无法打开 {0}: {1}: {2}</value>
   </data>
   <data name="StatusLoadingFullResolution" xml:space="preserve">
     <value>正在载入原始分辨率以显示 1:1...</value>
@@ -993,19 +993,19 @@
     <value>Gain-map 保真裁切失败: {0}</value>
   </data>
   <data name="StatusUltraHdrConvertUnavailable" xml:space="preserve">
-    <value>转为 Ultra HDR 不可用: 当前文件没有可重建的 gain-map 或单层 HDR 数据。</value>
+    <value>转为 Gain Map HDR 不可用: 当前文件没有可重建的 gain-map 或单层 HDR 数据。</value>
   </data>
   <data name="StatusGeneratingUltraHdrFormat" xml:space="preserve">
     <value>正在生成 Ultra HDR: {0}</value>
   </data>
   <data name="StatusEncodingGainMapFormat" xml:space="preserve">
-    <value>正在编码 {0} gain-map JPEG</value>
+    <value>正在编码 {0} Gain Map</value>
   </data>
   <data name="StatusExportedUltraHdrFormat" xml:space="preserve">
-    <value>已转为 Ultra HDR: {0}; {1}</value>
+    <value>已转为 Gain Map HDR: {0}; {1}</value>
   </data>
   <data name="StatusUltraHdrConvertFailedFormat" xml:space="preserve">
-    <value>转为 Ultra HDR 失败: {0}</value>
+    <value>转为 Gain Map HDR 失败: {0}</value>
   </data>
   <data name="StatusGeneratingSingleLayerHdrFormat" xml:space="preserve">
     <value>正在生成单层 HDR {0}: {1}</value>
@@ -1077,7 +1077,7 @@
     <value>HDR 另存为失败: {0}</value>
   </data>
   <data name="SaveAsModeUltraHdrConvert" xml:space="preserve">
-    <value>转为 Ultra HDR / gain-map JPEG</value>
+    <value>转为 Gain Map HDR</value>
   </data>
   <data name="SaveAsModeGainMapPreserve" xml:space="preserve">
     <value>Gain-map 保真另存为</value>
@@ -1089,7 +1089,7 @@
     <value>导出模式: Gain-map 保真裁切，裁切 base/gainmap 并保留原映射参数</value>
   </data>
   <data name="StatusCropModeUltraHdrConvertFormat" xml:space="preserve">
-    <value>导出模式: 转为 Ultra HDR，从重建 HDR 重新生成 SDR base、{0} gainmap 和 metadata</value>
+    <value>导出模式: 转为 Gain Map HDR，从重建 HDR 重新生成 SDR base、{0} gainmap 和 metadata</value>
   </data>
   <data name="StatusCropModeSingleLayerHdrFormat" xml:space="preserve">
     <value>导出模式: 单层 HDR 转换，目标 {0}；JXR 写出 scRGB，JXL/AVIF/HEIF metadata 会写入对应 transfer</value>
@@ -1140,7 +1140,7 @@
     <value>Gain-map 保真裁切暂未接入可写后端: 需要 libultrahdr scenario 4 重新封装 base + gain map。裁切区域 {0},{1} {2}x{3} 已计算；未弹保存框、未生成文件。{4}</value>
   </data>
   <data name="StatusUltraHdrNoBackendFormat" xml:space="preserve">
-    <value>转为 Ultra HDR 暂未接入可写后端: {0} 需要 libultrahdr/libavif/libheif 写出 gain-map metadata。裁切区域 {1},{2} {3}x{4} 已计算；未弹保存框、未生成文件。{5}</value>
+    <value>转为 Gain Map HDR 暂未接入可写后端: {0} 需要 libultrahdr/libavif/libheif 写出 gain-map metadata。裁切区域 {1},{2} {3}x{4} 已计算；未弹保存框、未生成文件。{5}</value>
   </data>
   <data name="StatusSingleLayerHdrNoBackendFormat" xml:space="preserve">
     <value>单层 HDR 裁切暂未接入可写后端: 需要 native libjxl/libavif/libheif 工具。裁切区域 {0},{1} {2}x{3} 已计算；未弹保存框、未生成文件。{4}</value>
@@ -1204,5 +1204,38 @@
   </data>
   <data name="ExportFileEmptyNotReplaced" xml:space="preserve">
     <value>导出文件为空，未替换目标文件。</value>
+  </data>
+  <data name="BatchFormatGainMapHeic" xml:space="preserve">
+    <value>HEIC · Gain Map</value>
+  </data>
+  <data name="BatchFormatGainMapAvif" xml:space="preserve">
+    <value>AVIF · Gain Map</value>
+  </data>
+  <data name="CropUltraHdrBaseGamutP3" xml:space="preserve">
+    <value>Base P3 · 自动</value>
+  </data>
+  <data name="AnalysisAnalyzingPreview" xml:space="preserve">
+    <value>正在分析当前画面…</value>
+  </data>
+  <data name="SaveAsGamutDisplayP3AutoToneMapping" xml:space="preserve">
+    <value>Display P3（自动色调映射）</value>
+  </data>
+  <data name="InspectorSectionSelectorName" xml:space="preserve">
+    <value>详情与分析面板</value>
+  </data>
+  <data name="ExceptionImageDisplayAreaNotReady" xml:space="preserve">
+    <value>图片显示区域尚未就绪。</value>
+  </data>
+  <data name="ExceptionImageDisplayAreaInvalidSize" xml:space="preserve">
+    <value>图片显示区域尺寸无效。</value>
+  </data>
+  <data name="LivePhotoPreparing" xml:space="preserve">
+    <value>正在准备动态照片 · 点击取消</value>
+  </data>
+  <data name="StatusSkippedUnopenableFilesFormat" xml:space="preserve">
+    <value>已跳过无法打开的文件: {0}</value>
+  </data>
+  <data name="FilmstripThumbnailLoadErrorFormat" xml:space="preserve">
+    <value>{0} · 预览不可用，点击打开</value>
   </data>
 </root>

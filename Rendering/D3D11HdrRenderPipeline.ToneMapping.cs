@@ -44,16 +44,18 @@ public sealed partial class D3D11HdrRenderPipeline
             EffectiveDisplayBoostLog2,
             _displayConfiguration.MaxFullFrameSceneValue);
         constants.ImageLayout = GetCurrentImageLayout();
-        if (_toneMapAnalysisDirty)
+        var toneMapState = _toneMapModeCache.GetOrCreate(EffectiveViewModeForCurrentFrame, () =>
         {
-            _cachedToneMapInput = BuildToneMapConstants(constants);
-            _cachedToneMapOutput = BuildToneMapOutputConstants();
-            _toneMapAnalysisDirty = false;
-        }
+            var input = BuildToneMapConstants(constants);
+            var output = BuildToneMapOutputConstants();
+            return new ToneMapModeState(input, output, _toneMapAnalysis, _toneMappingEnabledForCurrentFrame);
+        });
+        _toneMapAnalysis = toneMapState.Analysis;
+        _toneMappingEnabledForCurrentFrame = toneMapState.Enabled;
 
         constants.ViewerTools = _viewerToolsConstants;
-        constants.ToneMapInput = _cachedToneMapInput;
-        constants.ToneMapOutput = _cachedToneMapOutput;
+        constants.ToneMapInput = toneMapState.Input;
+        constants.ToneMapOutput = toneMapState.Output;
         constants.ViewModeParams = new Vector4((float)EffectiveViewModeForCurrentFrame, (float)_headroomMode, _referenceWhiteExposureScale, (float)_colorGamutMappingMode);
         _context.UpdateSubresource(in constants, _gainMapConstantsBuffer, 0, 0, 0, null);
     }
@@ -70,9 +72,7 @@ public sealed partial class D3D11HdrRenderPipeline
 
     private void InvalidateToneMapAnalysis()
     {
-        _toneMapAnalysisDirty = true;
-        _cachedToneMapInput = default;
-        _cachedToneMapOutput = default;
+        _toneMapModeCache.Clear();
     }
 
     private Vector4 BuildToneMapConstants(GainMapShaderConstants constants)

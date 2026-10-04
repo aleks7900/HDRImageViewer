@@ -48,7 +48,7 @@ public sealed class ExrNativeDecoderParityTests
             Assert.Equal(width, decoded.PixelWidth);
             Assert.Equal(height, decoded.PixelHeight);
             Assert.Equal(DecodedBitmapPixelFormat.Rgba16Float, decoded.PixelFormat);
-            Assert.Equal(DecodedBitmapTransfer.LinearScRgb, decoded.Transfer);
+            Assert.Equal(DecodedBitmapTransfer.LinearSceneScRgb, decoded.Transfer);
             Assert.Equal(pixels, decoded.RgbaPixels);
         }
         finally
@@ -88,7 +88,9 @@ public sealed class ExrNativeDecoderParityTests
                 process.StartInfo.ArgumentList.Add(exrPath);
                 if (Path.GetFileNameWithoutExtension(converter).Equals("magick", StringComparison.OrdinalIgnoreCase))
                 {
-                    process.StartInfo.ArgumentList.Add("-colorspace");
+                    // Preserve scene-linear EXR samples even when ImageMagick labels them sRGB.
+                    process.StartInfo.ArgumentList.Add("-set");
+                    process.StartInfo.ArgumentList.Add("colorspace");
                     process.StartInfo.ArgumentList.Add("RGB");
                     process.StartInfo.ArgumentList.Add("-define");
                     process.StartInfo.ArgumentList.Add("quantum:format=floating-point");

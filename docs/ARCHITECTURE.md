@@ -112,6 +112,7 @@ Live Photo support is layered on top of the existing still-image pipeline instea
 - `DirectoryMetadataCache` keeps per-directory metadata in memory and flushes one JSON file per directory (named by a SHA-256 hash of the directory path) under `%LocalAppData%\HdrImageViewer\metadata-cache\` in debounced batches; legacy in-folder `.hdrimageviewer.meta.json` files are still read as a fallback.
 - LibHeifSharp HEIF/AVIF decode expands 10/12-bit samples to 16-bit in `Parallel.For` over rows and reports per-phase timings on the status line.
 - Thumbnail loading is cancellable, focus-ordered, and limited to a nearby window.
+- Filmstrip thumbnails are SDR. Gain-map thumbnails use the embedded SDR rendition with orientation and color conversion, without reapplying HDR gain. Single-layer HDR thumbnails use the viewer's SDR reference white (203 nits for PQ/HLG/scene-linear content; 80 nits for display-referred scRGB), followed by a shared-channel highlight shoulder. These conversions are separate from the SDR export conversion.
 
 ## Current Follow-Ups
 

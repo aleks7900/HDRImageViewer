@@ -1,4 +1,5 @@
 using HdrImageViewer.Services;
+using HdrImageViewer.Presentation;
 using Microsoft.UI.Xaml;
 
 namespace HdrImageViewer.Pages;
@@ -35,7 +36,16 @@ public sealed partial class HomePage
         _isFolderNavigationLoading = true;
         try
         {
-            await LoadImagePathAsync(_folderImagePaths[nextIndex], invalidateRendererCache: false);
+            var failed = await ImageNavigationContext.NavigateAsync(_folderImagePaths.ToArray(), _currentFolderIndex, direction,
+                path => LoadImagePathAsync(path, invalidateRendererCache: false, preserveNavigationList: true), _lifetime.Token);
+            if (failed.Count > 0)
+            {
+                var fileList = string.Join(", ", failed.Select(Path.GetFileName));
+                ViewModel.UpdateRenderStatus($"{ViewModel.RenderStatus}; {Localization.GetString("StatusSkippedUnopenableFilesFormat", fileList)}");
+            }
+        }
+        catch (OperationCanceledException)
+        {
         }
         finally
         {

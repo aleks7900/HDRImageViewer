@@ -8,12 +8,12 @@ This document records the current local build, dependency, package, and sync lay
 - Target: `net10.0-windows10.0.26100.0`.
 - Windows App SDK: `2.2.0`.
 - WinApp BuildTools: `0.4.0`.
-- Current project/MSIX version: `1.0.32.0`.
+- Current project/MSIX version: `1.0.35.0`.
 - Current maintained native dependency platform: x64.
 - Current local package output:
 
 ```text
-AppPackages\HdrImageViewer_1.0.32.0_x64_Test
+AppPackages\HdrImageViewer_1.0.35.0_x64_Test
 ```
 
 ## Local Build
@@ -37,7 +37,7 @@ Launch verification should use `dotnet run`; directly starting the built exe can
 Build a local portable zip:
 
 ```powershell
-.\eng\publish-portable.ps1 -Version 1.0.32.0 -Platform x64
+.\eng\publish-portable.ps1 -Version 1.0.35.0 -Platform x64
 ```
 
 If `-Version` is omitted, `eng\publish-portable.ps1` reads the version from `HdrImageViewer.csproj`.
@@ -61,7 +61,7 @@ Build and sign a local x64 MSIX package:
 The script generates and signs:
 
 ```text
-AppPackages\HdrImageViewer_1.0.32.0_x64_Test\HdrImageViewer_1.0.32.0_x64.msix
+AppPackages\HdrImageViewer_1.0.35.0_x64_Test\HdrImageViewer_1.0.35.0_x64.msix
 ```
 
 If `-PfxPath` is omitted, the script still generates the MSIX but leaves it unsigned. A clean machine must trust the matching certificate before installing a self-signed sideload package.
@@ -77,22 +77,10 @@ external\
   _deps\          # synced source/build cache, not package input
 ```
 
-Current `external\_deps` contents include:
-
-- `build-sources`
-- `libavif`
-- `libheif`
-- `libultrahdr`
-- `x265-multilib`
-
-Current size checkpoints:
-
-- `external\encoders\x64`: root tool set plus isolated tool subdirectories such as `avifgainmaputil`.
-- `external\_deps`: about `259.01 MB`.
-- `native\HdrImageViewer.Native\build\x64\Release`: about `5.78 MB`.
-- `AppPackages\HdrImageViewer_1.0.28.0_x64_Test`: about `234.1 MB`; the generated MSIX is about `109.9 MB`.
-
-`bin/`, `obj/`, and `AppPackages/` are generated outputs and can be rebuilt. They are ignored by git.
+The current pinned toolchain lives under `external/_deps/codec-upgrade`, including
+downloads, source trees, the build prefix, staging directories and prior-bundle backups.
+See [the codec upgrade notes](CODEC_UPGRADE_2026-10.md). Generated `bin/`, `obj/`,
+`AppPackages/` and third-party caches remain ignored by git.
 
 ## Bundled Runtime Copying
 
@@ -113,46 +101,22 @@ Build x64 OpenEXR bridge:
 .\eng\build-native.ps1 -Platforms x64 -Configuration Release
 ```
 
-Manual CMake equivalent:
-
-```powershell
-cmake -S native/HdrImageViewer.Native -B native/HdrImageViewer.Native/build/x64 -A x64
-cmake --build native/HdrImageViewer.Native/build/x64 --config Release
-```
-
-Expected output:
-
-```text
-native\HdrImageViewer.Native\build\x64\Release
-```
-
-If OpenEXR is not found, the native project can build a stub DLL that reports EXR decode as unavailable so the managed app still compiles.
+Default Release builds restore the pinned codec stack and OpenEXR 3.5.1 using
+Python 3.14+ and the MSYS2 UCRT64 build tools. `HDRIV_MSYS2_ROOT` selects a
+non-default MSYS2 root. CI and portable release workflows use the same process.
+An explicit `-VcpkgRoot` opts into the legacy bridge-only developer build.
+The pinned build requires OpenEXR and fails instead of producing a stub.
 
 ## Dependency Verification
 
-Run:
-
 ```powershell
-.\eng\verify-codecs.ps1
+./eng/verify-codecs.ps1
 ```
 
-The script checks:
-
-- x64 bundled codec/tool files in `external\encoders\x64`.
-- x64 isolated AVIF gain-map tool files in `external\encoders\x64\avifgainmaputil`.
-- x64 `HdrImageViewer.Native` OpenEXR bridge runtime files.
-
-Repair Ultra HDR CLI from a local libultrahdr build:
-
-```powershell
-.\eng\verify-codecs.ps1 -RepairUltraHdr
-```
-
-Repair source:
-
-```text
-external\_deps\libultrahdr\build\Release\ultrahdr_app.exe
-```
+This validates runtime SHA256 values and CLI versions, and checks CLI startup
+without MSYS2 in PATH. Rebuild a missing or damaged bundle with
+`python eng/build-codecs.py --apply`; old `-RepairUltraHdr` copying is no longer
+supported because current CLIs must remain paired with their dependent DLLs.
 
 ## Optional MSYS2 Fallback
 

@@ -779,7 +779,7 @@
     <value>Открыто {0} изображений через ассоциацию файлов</value>
   </data>
   <data name="StatusOpenFailedFormat" xml:space="preserve">
-    <value>Ошибка открытия: {0}: {1}</value>
+    <value>Не удалось открыть {0}: {1}: {2}</value>
   </data>
   <data name="StatusLoadingFullResolution" xml:space="preserve">
     <value>Загрузка исходного разрешения для отображения 1:1...</value>
@@ -993,19 +993,19 @@
     <value>Ошибка обрезки Gain Map без потерь: {0}</value>
   </data>
   <data name="StatusUltraHdrConvertUnavailable" xml:space="preserve">
-    <value>Преобразование в Ultra HDR недоступно: в файле нет данных Gain Map или однослойного HDR.</value>
+    <value>Преобразование в Gain Map HDR недоступно: в текущем файле нет данных gain-map или однослойного HDR для реконструкции.</value>
   </data>
   <data name="StatusGeneratingUltraHdrFormat" xml:space="preserve">
     <value>Создание Ultra HDR: {0}</value>
   </data>
   <data name="StatusEncodingGainMapFormat" xml:space="preserve">
-    <value>Кодирование {0} Gain Map JPEG</value>
+    <value>Кодирование {0} Gain Map</value>
   </data>
   <data name="StatusExportedUltraHdrFormat" xml:space="preserve">
-    <value>Преобразовано в Ultra HDR: {0}; {1}</value>
+    <value>Преобразовано в Gain Map HDR: {0}; {1}</value>
   </data>
   <data name="StatusUltraHdrConvertFailedFormat" xml:space="preserve">
-    <value>Ошибка преобразования в Ultra HDR: {0}</value>
+    <value>Ошибка преобразования в Gain Map HDR: {0}</value>
   </data>
   <data name="StatusGeneratingSingleLayerHdrFormat" xml:space="preserve">
     <value>Создание однослойного HDR {0}: {1}</value>
@@ -1077,7 +1077,7 @@
     <value>Ошибка сохранения HDR: {0}</value>
   </data>
   <data name="SaveAsModeUltraHdrConvert" xml:space="preserve">
-    <value>Преобразовать в Ultra HDR / gain-map JPEG</value>
+    <value>Преобразовать в Gain Map HDR</value>
   </data>
   <data name="SaveAsModeGainMapPreserve" xml:space="preserve">
     <value>Сохранить как Gain Map без потерь</value>
@@ -1089,7 +1089,7 @@
     <value>Режим экспорта: обрезка Gain Map без потерь с сохранением параметров отображения</value>
   </data>
   <data name="StatusCropModeUltraHdrConvertFormat" xml:space="preserve">
-    <value>Режим экспорта: конвертация в Ultra HDR с повторным созданием SDR base, {0} Gain Map и метаданных</value>
+    <value>Режим экспорта: преобразование в Gain Map HDR, пересоздание SDR base, {0} gainmap и метаданных из реконструированного HDR</value>
   </data>
   <data name="StatusCropModeSingleLayerHdrFormat" xml:space="preserve">
     <value>Режим экспорта: конвертация в однослойный HDR, цель {0}; JXR пишет scRGB, JXL/AVIF/HEIF пишут метаданные transfer</value>
@@ -1140,7 +1140,7 @@
     <value>Обрезка Gain Map без потерь не подключена к серверной части записи: требуется сценарий 4 libultrahdr для переупаковки base + gain map. Область {0},{1} {2}x{3} рассчитана; файл не создан. {4}</value>
   </data>
   <data name="StatusUltraHdrNoBackendFormat" xml:space="preserve">
-    <value>Преобразование в Ultra HDR не подключено к серверной части записи: {0} требует libultrahdr/libavif/libheif для записи метаданных Gain Map. Область {1},{2} {3}x{4} рассчитана; файл не создан. {5}</value>
+    <value>Преобразование в Gain Map HDR еще не подключено к модулю записи: {0} требует libultrahdr/libavif/libheif для записи метаданных gain-map. Область кадрирования {1},{2} {3}x{4} вычислена; диалог сохранения не открыт, файл не создан. {5}</value>
   </data>
   <data name="StatusSingleLayerHdrNoBackendFormat" xml:space="preserve">
     <value>Обрезка однослойного HDR не подключена к серверной части записи: требуются утилиты libjxl/libavif/libheif. Область {0},{1} {2}x{3} рассчитана; файл не создан. {4}</value>
@@ -1204,5 +1204,38 @@
   </data>
   <data name="ExportFileEmptyNotReplaced" xml:space="preserve">
     <value>Экспортированный файл пуст; целевой файл не заменен.</value>
+  </data>
+  <data name="BatchFormatGainMapHeic" xml:space="preserve">
+    <value>HEIC · Gain Map</value>
+  </data>
+  <data name="BatchFormatGainMapAvif" xml:space="preserve">
+    <value>AVIF · Gain Map</value>
+  </data>
+  <data name="CropUltraHdrBaseGamutP3" xml:space="preserve">
+    <value>Base P3 · Авто</value>
+  </data>
+  <data name="AnalysisAnalyzingPreview" xml:space="preserve">
+    <value>Анализ текущего изображения…</value>
+  </data>
+  <data name="SaveAsGamutDisplayP3AutoToneMapping" xml:space="preserve">
+    <value>Display P3 (автоматическое тональное отображение)</value>
+  </data>
+  <data name="InspectorSectionSelectorName" xml:space="preserve">
+    <value>Панель сведений и анализа</value>
+  </data>
+  <data name="ExceptionImageDisplayAreaNotReady" xml:space="preserve">
+    <value>Область отображения изображения еще не готова.</value>
+  </data>
+  <data name="ExceptionImageDisplayAreaInvalidSize" xml:space="preserve">
+    <value>Недопустимый размер области отображения изображения.</value>
+  </data>
+  <data name="LivePhotoPreparing" xml:space="preserve">
+    <value>Подготовка Live Photo · Нажмите для отмены</value>
+  </data>
+  <data name="StatusSkippedUnopenableFilesFormat" xml:space="preserve">
+    <value>Пропущены файлы, которые не удалось открыть: {0}</value>
+  </data>
+  <data name="FilmstripThumbnailLoadErrorFormat" xml:space="preserve">
+    <value>{0} · Предпросмотр недоступен, нажмите для открытия</value>
   </data>
 </root>

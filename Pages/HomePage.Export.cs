@@ -132,6 +132,10 @@ public sealed partial class HomePage
 
         var pixelWidth = (uint)Math.Max(0, _renderer.ContentPixelWidth);
         var pixelHeight = (uint)Math.Max(0, _renderer.ContentPixelHeight);
+        if (ExifOrientationTransform.SwapsDimensions((int)_renderer.ContentOrientation))
+        {
+            (pixelWidth, pixelHeight) = (pixelHeight, pixelWidth);
+        }
         if (SelectedCropExportMode == CropExportMode.SdrPreview)
         {
             // SDR display bypasses D3D. Use the same source and orientation as
@@ -282,7 +286,7 @@ public sealed partial class HomePage
             SuggestedStartLocation = PickerLocationId.PicturesLibrary,
             SuggestedFileName = CreateCropSuggestedFileName(_currentDocument, CropExportMode.GainMapPreserve),
         };
-        AddAvailableExportChoices(picker, HdrExportMode.GainMap);
+        AddAvailableExportChoices(picker, HdrExportMode.GainMap, jpegOnly: true);
 
         var outputFile = await PickSaveDestinationAsync(picker);
         if (outputFile is null)
@@ -372,7 +376,7 @@ public sealed partial class HomePage
             }
 
             UpdateExportProgress(Localization.GetString("StatusEncodingGainMapFormat", DescribeUltraHdrGainMapChannelMode(SelectedUltraHdrGainMapChannelMode)));
-            var exportSummary = await GainMapHdrExportService.ExportJpegUltraHdrAsync(
+            var exportSummary = await GainMapHdrExportService.ExportAsync(
                 _currentDocument,
                 bounds,
                 outputFile.Path,
@@ -387,7 +391,7 @@ public sealed partial class HomePage
         }
         catch (Exception ex)
         {
-            ViewModel.UpdateRenderStatus($"{_renderer.LastRenderStatus}; {Localization.GetString("StatusUltraHdrConvertFailedFormat", ex.GetType().Name, ex.Message)}");
+            ViewModel.UpdateRenderStatus($"{_renderer.LastRenderStatus}; {Localization.GetString("StatusUltraHdrConvertFailedFormat", $"{ex.GetType().Name}: {ex.Message}")}");
         }
         finally
         {
@@ -580,10 +584,8 @@ public sealed partial class HomePage
             HorizontalAlignment = HorizontalAlignment.Stretch,
             SelectedIndex = 0,
         };
-        ultraHdrBaseGamutSelector.Items.Add(new ComboBoxItem { Content = Localization.GetString("SaveAsGamutAutoMatch") });
-        ultraHdrBaseGamutSelector.Items.Add(new ComboBoxItem { Content = "BT.709 / sRGB" });
-        ultraHdrBaseGamutSelector.Items.Add(new ComboBoxItem { Content = "Display P3" });
-        ultraHdrBaseGamutSelector.Items.Add(new ComboBoxItem { Content = "BT.2020 / Rec.2100" });
+        ultraHdrBaseGamutSelector.Items.Add(new ComboBoxItem { Content = Localization.GetString("SaveAsGamutDisplayP3AutoToneMapping") });
+        ultraHdrBaseGamutSelector.IsEnabled = false;
 
         modeSelector.SelectionChanged += (_, _) =>
         {
@@ -716,7 +718,7 @@ public sealed partial class HomePage
             SuggestedStartLocation = PickerLocationId.PicturesLibrary,
             SuggestedFileName = CreateSaveAsSuggestedFileName(document, GetSaveAsSuffix(mode)),
         };
-        AddAvailableExportChoices(picker, exportMode);
+        AddAvailableExportChoices(picker, exportMode, jpegOnly: mode == SaveAsExportMode.GainMapPreserve);
 
         var outputFile = await PickSaveDestinationAsync(picker);
         if (outputFile is null)
@@ -767,7 +769,7 @@ public sealed partial class HomePage
             else
             {
                 UpdateExportProgress(Localization.GetString("StatusEncodingGainMapFormat", DescribeUltraHdrGainMapChannelMode(options.UltraHdrGainMapChannelMode)));
-                exportSummary = await GainMapHdrExportService.ExportJpegUltraHdrAsync(
+                exportSummary = await GainMapHdrExportService.ExportAsync(
                     document,
                     outputFile.Path,
                     new UltraHdrExportOptions(options.UltraHdrGainMapChannelMode, options.UltraHdrSdrBaseColorGamut),
@@ -854,10 +856,10 @@ public sealed partial class HomePage
                 : _renderer.DisplayConfiguration.MaxSceneValue;
     }
 
-    private static void AddAvailableExportChoices(FileSavePicker picker, HdrExportMode mode)
+    private static void AddAvailableExportChoices(FileSavePicker picker, HdrExportMode mode, bool jpegOnly = false)
     {
         var choices = HdrExportBackendCatalog.GetChoices(mode)
-            .Where(choice => choice.IsAvailable)
+            .Where(choice => choice.IsAvailable && (!jpegOnly || choice.Extension == ".jpg"))
             .ToArray();
         foreach (var choice in choices)
         {
@@ -906,9 +908,8 @@ public sealed partial class HomePage
 
     private static bool CanExportGainMapHdr(HdrImageDocument document)
     {
-        return document.GainMapProbe?.IsRenderableUltraHdr == true
+        return document.HasRenderableGainMap
             || document.HeifAvifProbe?.HasHdrTransfer == true
-            || document.HeifAvifProbe?.HasGainMapAuxiliary == true
             || document.Format.Kind is HdrImageKind.SingleLayerHdr;
     }
 
@@ -926,7 +927,7 @@ public sealed partial class HomePage
 
         if (document.HeifAvifProbe?.HasHdrTransfer == true || document.Format.Kind is HdrImageKind.SingleLayerHdr)
         {
-            return "single-layer HDR source reconstructed to JPEG Ultra HDR";
+            return "single-layer HDR source reconstructed to Gain Map HDR";
         }
 
         return document.Format.DisplayName;

@@ -21,30 +21,35 @@ public sealed class LuminanceSnapshot
     public float PeakNits { get; }
     public int Count { get; }
 
-    public LuminanceSnapshot(int width, int height, byte[] pixels, Vector4 layout, long version, float sdrWhiteNits = 80)
+    public LuminanceSnapshot(int width, int height, byte[] pixels, Vector4 layout, long version,
+        float sdrWhiteNits = 80, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         if (width <= 0 || height <= 0 || pixels.Length != checked(width * height * 8))
             throw new ArgumentException("Invalid FP16 preview dimensions.");
         Width = width; Height = height; _pixels = pixels; _layout = layout; Version = version;
         SdrWhiteNits = float.IsFinite(sdrWhiteNits) && sdrWhiteNits > 0 ? sdrWhiteNits : 80;
         double sum = 0;
         for (var y = 0; y < height; y++)
-        for (var x = 0; x < width; x++)
         {
-            if (Sample(x, y) is not { } sample) continue;
-            var nits = ToNits(sample);
-            Histogram[HistogramBin(nits)]++;
-            RedHistogram[ChannelBin(sample.X * 80, SdrWhiteNits)]++;
-            GreenHistogram[ChannelBin(sample.Y * 80, SdrWhiteNits)]++;
-            BlueHistogram[ChannelBin(sample.Z * 80, SdrWhiteNits)]++;
-            if (ChromaticityDiagram.FromScRgb(sample) is { } xy && ChromaticityDiagram.Bin(xy) is var bin && bin >= 0)
+            cancellationToken.ThrowIfCancellationRequested();
+            for (var x = 0; x < width; x++)
             {
-                ChromaticityBins[bin]++;
-                ChromaticityCount++;
+                if (Sample(x, y) is not { } sample) continue;
+                var nits = ToNits(sample);
+                Histogram[HistogramBin(nits)]++;
+                RedHistogram[ChannelBin(sample.X * 80, SdrWhiteNits)]++;
+                GreenHistogram[ChannelBin(sample.Y * 80, SdrWhiteNits)]++;
+                BlueHistogram[ChannelBin(sample.Z * 80, SdrWhiteNits)]++;
+                if (ChromaticityDiagram.FromScRgb(sample) is { } xy && ChromaticityDiagram.Bin(xy) is var bin && bin >= 0)
+                {
+                    ChromaticityBins[bin]++;
+                    ChromaticityCount++;
+                }
+                sum += nits;
+                PeakNits = Math.Max(PeakNits, nits);
+                Count++;
             }
-            sum += nits;
-            PeakNits = Math.Max(PeakNits, nits);
-            Count++;
         }
         AverageNits = Count == 0 ? 0 : sum / Count;
     }

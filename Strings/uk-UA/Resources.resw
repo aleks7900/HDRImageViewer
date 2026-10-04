@@ -560,7 +560,7 @@
     <value>Про показники аналізу</value>
   </data>
   <data name="AnalysisAboutValuesDescription.Text" xml:space="preserve">
-    <value>Криві RGB отримані з попереднього перегляду scRGB після відображення. Ліва половина — SDR (шкала sRGB), середня лінія — поточна точка білого SDR; кожна пунктирна лінія праворуч додає +1 EV експозиції, крайній правий край вміщує +6 EV і вище. Канали використовують спільну вертикальну вісь із квадратним коренем кількості пікселів. Від&apos;ємні значення потрапляють у крайній лівий кут. Яскравість знизу — розрахункова RGB-яскравість. Оновлюйте після змін. Права частина спліту використовує адаптивний HDR.</value>
+    <value>Криві RGB отримані з попереднього перегляду scRGB після відображення. Ліва половина — SDR (шкала sRGB), середня лінія — поточна точка білого SDR; кожна пунктирна лінія праворуч додає +1 EV експозиції, крайній правий край вміщує +6 EV і вище. Канали використовують спільну вертикальну вісь із квадратним коренем кількості пікселів. Від'ємні значення потрапляють у крайній лівий кут. Яскравість знизу — розрахункова RGB-яскравість. Оновлюйте після змін. Права частина спліту використовує адаптивний HDR.</value>
   </data>
   <data name="BatchExportTitle" xml:space="preserve">
     <value>Пакетний експорт</value>
@@ -779,7 +779,7 @@
     <value>Відкрито {0} зображень через системну асоціацію файлів</value>
   </data>
   <data name="StatusOpenFailedFormat" xml:space="preserve">
-    <value>Помилка відкриття: {0}: {1}</value>
+    <value>Не вдалося відкрити {0}: {1}: {2}</value>
   </data>
   <data name="StatusLoadingFullResolution" xml:space="preserve">
     <value>Завантаження повної роздільності для відображення 1:1...</value>
@@ -806,7 +806,7 @@
     <value>Камера</value>
   </data>
   <data name="ExifLens" xml:space="preserve">
-    <value>Об&apos;єктив</value>
+    <value>Об'єктив</value>
   </data>
   <data name="ExifDateTaken" xml:space="preserve">
     <value>Дата зйомки</value>
@@ -993,19 +993,19 @@
     <value>Помилка обтинання Gain Map без втрат: {0}</value>
   </data>
   <data name="StatusUltraHdrConvertUnavailable" xml:space="preserve">
-    <value>Перетворення на Ultra HDR недоступне: у файлі немає даних Gain Map або одношарового HDR.</value>
+    <value>Перетворення на Gain Map HDR недоступне: поточний файл не має даних gain-map або одношарового HDR для реконструкції.</value>
   </data>
   <data name="StatusGeneratingUltraHdrFormat" xml:space="preserve">
     <value>Створення Ultra HDR: {0}</value>
   </data>
   <data name="StatusEncodingGainMapFormat" xml:space="preserve">
-    <value>Кодування {0} Gain Map JPEG</value>
+    <value>Кодування {0} Gain Map</value>
   </data>
   <data name="StatusExportedUltraHdrFormat" xml:space="preserve">
-    <value>Перетворено на Ultra HDR: {0}; {1}</value>
+    <value>Перетворено на Gain Map HDR: {0}; {1}</value>
   </data>
   <data name="StatusUltraHdrConvertFailedFormat" xml:space="preserve">
-    <value>Помилка перетворення на Ultra HDR: {0}</value>
+    <value>Помилка перетворення на Gain Map HDR: {0}</value>
   </data>
   <data name="StatusGeneratingSingleLayerHdrFormat" xml:space="preserve">
     <value>Створення одношарового HDR {0}: {1}</value>
@@ -1077,7 +1077,7 @@
     <value>Помилка збереження HDR: {0}</value>
   </data>
   <data name="SaveAsModeUltraHdrConvert" xml:space="preserve">
-    <value>Перетворити на Ultra HDR / gain-map JPEG</value>
+    <value>Перетворити на Gain Map HDR</value>
   </data>
   <data name="SaveAsModeGainMapPreserve" xml:space="preserve">
     <value>Зберегти як Gain Map без втрат</value>
@@ -1089,7 +1089,7 @@
     <value>Режим експорту: обтинання Gain Map без втрат зі збереженням параметрів відображення</value>
   </data>
   <data name="StatusCropModeUltraHdrConvertFormat" xml:space="preserve">
-    <value>Режим експорту: конвертація в Ultra HDR із повторним створенням SDR base, {0} Gain Map та метаданих</value>
+    <value>Режим експорту: перетворення на Gain Map HDR, повторна генерація SDR base, {0} gainmap та метаданих із реконструйованого HDR</value>
   </data>
   <data name="StatusCropModeSingleLayerHdrFormat" xml:space="preserve">
     <value>Режим експорту: конвертація в одношаровий HDR, ціль {0}; JXR записує scRGB, JXL/AVIF/HEIF записують метадані transfer</value>
@@ -1140,7 +1140,7 @@
     <value>Обтинання Gain Map без втрат не підключено до бекенду запису: потрібен сценарій 4 libultrahdr для перепакування base + gain map. Область {0},{1} {2}x{3} розрахована; файл не створено. {4}</value>
   </data>
   <data name="StatusUltraHdrNoBackendFormat" xml:space="preserve">
-    <value>Перетворення на Ultra HDR не підключено до бекенду запису: {0} вимагає libultrahdr/libavif/libheif для запису метаданих Gain Map. Область {1},{2} {3}x{4} розрахована; файл не створено. {5}</value>
+    <value>Перетворення на Gain Map HDR ще не підключено до модуля запису: {0} вимагає libultrahdr/libavif/libheif для запису метаданих gain-map. Область обтинання {1},{2} {3}x{4} обчислена; діалог збереження не відкрито, файл не створено. {5}</value>
   </data>
   <data name="StatusSingleLayerHdrNoBackendFormat" xml:space="preserve">
     <value>Обтинання одношарового HDR не підключено до бекенду запису: потрібні утиліти libjxl/libavif/libheif. Область {0},{1} {2}x{3} розрахована; файл не створено. {4}</value>
@@ -1179,7 +1179,7 @@
     <value>Тип</value>
   </data>
   <data name="BatchExportPatternExample.Text" xml:space="preserve">
-    <value>ім&apos;яфайлу-export</value>
+    <value>ім'яфайлу-export</value>
   </data>
   <data name="VersionFormat" xml:space="preserve">
     <value>Версія: {0}</value>
@@ -1204,5 +1204,38 @@
   </data>
   <data name="ExportFileEmptyNotReplaced" xml:space="preserve">
     <value>Експортований файл порожній; цільовий файл не замінено.</value>
+  </data>
+  <data name="BatchFormatGainMapHeic" xml:space="preserve">
+    <value>HEIC · Gain Map</value>
+  </data>
+  <data name="BatchFormatGainMapAvif" xml:space="preserve">
+    <value>AVIF · Gain Map</value>
+  </data>
+  <data name="CropUltraHdrBaseGamutP3" xml:space="preserve">
+    <value>Base P3 · Авто</value>
+  </data>
+  <data name="AnalysisAnalyzingPreview" xml:space="preserve">
+    <value>Аналіз поточного зображення…</value>
+  </data>
+  <data name="SaveAsGamutDisplayP3AutoToneMapping" xml:space="preserve">
+    <value>Display P3 (автоматичне тональне відображення)</value>
+  </data>
+  <data name="InspectorSectionSelectorName" xml:space="preserve">
+    <value>Панель деталей та аналізу</value>
+  </data>
+  <data name="ExceptionImageDisplayAreaNotReady" xml:space="preserve">
+    <value>Область відображення зображення ще не готова.</value>
+  </data>
+  <data name="ExceptionImageDisplayAreaInvalidSize" xml:space="preserve">
+    <value>Недійсний розмір області відображення зображення.</value>
+  </data>
+  <data name="LivePhotoPreparing" xml:space="preserve">
+    <value>Підготовка Live Photo · Натисніть для скасування</value>
+  </data>
+  <data name="StatusSkippedUnopenableFilesFormat" xml:space="preserve">
+    <value>Пропущено файли, які не вдалося відкрити: {0}</value>
+  </data>
+  <data name="FilmstripThumbnailLoadErrorFormat" xml:space="preserve">
+    <value>{0} · Попередній перегляд недоступний, натисніть, щоб відкрити</value>
   </data>
 </root>

@@ -36,6 +36,8 @@
             Grid.Row="1"
             AutomationProperties.AutomationId="MainNavigationView"
             CompactPaneLength="48"
+            PaneDisplayMode="LeftCompact"
+            IsPaneOpen="False"
             IsBackButtonVisible="Collapsed"
             OpenPaneLength="280"
             IsPaneToggleButtonVisible="False"

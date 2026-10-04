@@ -59,10 +59,10 @@
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
   <data name="AppTitle" xml:space="preserve">
-    <value>Visionneuse d&apos;images HDR</value>
+    <value>Visionneuse d'images HDR</value>
   </data>
   <data name="AppTitleBar.Title" xml:space="preserve">
-    <value>Visionneuse d&apos;images HDR</value>
+    <value>Visionneuse d'images HDR</value>
   </data>
   <data name="NavViewer" xml:space="preserve">
     <value>Visionneuse</value>
@@ -83,7 +83,7 @@
     <value>À propos</value>
   </data>
   <data name="AboutAppName.Text" xml:space="preserve">
-    <value>Visionneuse d&apos;images HDR</value>
+    <value>Visionneuse d'images HDR</value>
   </data>
   <data name="AboutVersionLoading" xml:space="preserve">
     <value>Version : Chargement...</value>
@@ -95,7 +95,7 @@
     <value>Inconnu</value>
   </data>
   <data name="AboutDescription.Text" xml:space="preserve">
-    <value>Visionneuse d&apos;images basée sur WinUI 3 et la surface de rendu DirectX HDR, prenant en charge le décodage et le mappage indépendants des gain maps et des images HDR monocouches.</value>
+    <value>Visionneuse d'images basée sur WinUI 3 et la surface de rendu DirectX HDR, prenant en charge le décodage et le mappage indépendants des gain maps et des images HDR monocouches.</value>
   </data>
   <data name="AboutWeiboLink.Content" xml:space="preserve">
     <value>Profil Weibo</value>
@@ -116,7 +116,7 @@
     <value>Parcourir les images</value>
   </data>
   <data name="SettingsMouseWheelZoom" xml:space="preserve">
-    <value>Zoomer l&apos;image</value>
+    <value>Zoomer l'image</value>
   </data>
   <data name="SettingsTouchpadGesturesToggle.Header" xml:space="preserve">
     <value>Pavé tactile / Zoom tactile</value>
@@ -155,13 +155,13 @@
     <value>Langue</value>
   </data>
   <data name="SettingsLanguageRestartTip.Text" xml:space="preserve">
-    <value>Redémarrez l&apos;application pour appliquer pleinement le changement de langue.</value>
+    <value>Redémarrez l'application pour appliquer pleinement le changement de langue.</value>
   </data>
   <data name="SettingsRestartNow.Content" xml:space="preserve">
     <value>Redémarrer maintenant</value>
   </data>
   <data name="SettingsShowInspectorPanelToggle.Header" xml:space="preserve">
-    <value>Panneau d&apos;informations</value>
+    <value>Panneau d'informations</value>
   </data>
   <data name="SettingsShowFilmstripToggle.Header" xml:space="preserve">
     <value>Pellicule inférieure</value>
@@ -194,7 +194,7 @@
     <value>Copier</value>
   </data>
   <data name="ContextMenuCopyPath" xml:space="preserve">
-    <value>Copier en tant que chemin d&apos;accès</value>
+    <value>Copier en tant que chemin d'accès</value>
   </data>
   <data name="ContextMenuFileInfo" xml:space="preserve">
     <value>Informations sur le fichier</value>
@@ -206,10 +206,10 @@
     <value>Surface de rendu HDR</value>
   </data>
   <data name="SurfaceImageCanvas" xml:space="preserve">
-    <value>Zone de dessin d&apos;image</value>
+    <value>Zone de dessin d'image</value>
   </data>
   <data name="SurfacePreviewFallback" xml:space="preserve">
-    <value>Couche de secours pour l&apos;aperçu d&apos;image</value>
+    <value>Couche de secours pour l'aperçu d'image</value>
   </data>
   <data name="LivePhotoPlay" xml:space="preserve">
     <value>Lire la Live Photo</value>
@@ -233,13 +233,13 @@
     <value>Ouvrir</value>
   </data>
   <data name="ToolbarOpenImage" xml:space="preserve">
-    <value>Ouvrir l&apos;image</value>
+    <value>Ouvrir l'image</value>
   </data>
   <data name="ToolbarReload" xml:space="preserve">
     <value>Recharger</value>
   </data>
   <data name="ToolbarReloadImage" xml:space="preserve">
-    <value>Recharger l&apos;image</value>
+    <value>Recharger l'image</value>
   </data>
   <data name="ToolbarBatchExport" xml:space="preserve">
     <value>Exportation par lots</value>
@@ -251,13 +251,13 @@
     <value>Analyse de luminance et comparaison HDR</value>
   </data>
   <data name="ToolbarToggleInspector" xml:space="preserve">
-    <value>Basculer le panneau d&apos;informations</value>
+    <value>Basculer le panneau d'informations</value>
   </data>
   <data name="ToolbarHideInspector" xml:space="preserve">
-    <value>Masquer le panneau d&apos;informations (I)</value>
+    <value>Masquer le panneau d'informations (I)</value>
   </data>
   <data name="ToolbarShowInspector" xml:space="preserve">
-    <value>Afficher le panneau d&apos;informations (I)</value>
+    <value>Afficher le panneau d'informations (I)</value>
   </data>
   <data name="ToolbarCrop" xml:space="preserve">
     <value>Rogner</value>
@@ -323,7 +323,7 @@
     <value>Ajuster le coin de rognage inférieur droit</value>
   </data>
   <data name="CropExportMode" xml:space="preserve">
-    <value>Mode d&apos;exportation du rognage</value>
+    <value>Mode d'exportation du rognage</value>
   </data>
   <data name="CropModeSdrPreview" xml:space="preserve">
     <value>Aperçu SDR</value>
@@ -365,7 +365,7 @@
     <value>Gamut</value>
   </data>
   <data name="InspectorDetailsHeader" xml:space="preserve">
-    <value>Détails de l&apos;image</value>
+    <value>Détails de l'image</value>
   </data>
   <data name="InspectorSectionFile.Header" xml:space="preserve">
     <value>Fichier</value>
@@ -386,16 +386,16 @@
     <value>Couleur</value>
   </data>
   <data name="InspectorSectionDisplayMode.Header" xml:space="preserve">
-    <value>Mode d&apos;affichage</value>
+    <value>Mode d'affichage</value>
   </data>
   <data name="InspectorHdrDisplayMode" xml:space="preserve">
-    <value>Mode d&apos;affichage HDR</value>
+    <value>Mode d'affichage HDR</value>
   </data>
   <data name="InspectorCustomWhiteNits" xml:space="preserve">
     <value>Luminance de blanc de référence personnalisée</value>
   </data>
   <data name="InspectorCustomWhiteNitsToolTip" xml:space="preserve">
-    <value>Blanc de référence = luminance cible pour le blanc diffus. 203 nits = affichage absolu (conforme à Photos Windows) ; diminuez pour assombrir, augmentez pour éclaircir. S&apos;applique au HDR monocouche (PQ/HLG) et au gain map HDR.</value>
+    <value>Blanc de référence = luminance cible pour le blanc diffus. 203 nits = affichage absolu (conforme à Photos Windows) ; diminuez pour assombrir, augmentez pour éclaircir. S'applique au HDR monocouche (PQ/HLG) et au gain map HDR.</value>
   </data>
   <data name="InspectorAbsolute203Nits.Text" xml:space="preserve">
     <value>Absolu 203 nits</value>
@@ -407,7 +407,7 @@
     <value>Cible des hautes lumières HDR</value>
   </data>
   <data name="InspectorResetToPeak" xml:space="preserve">
-    <value>Réinitialiser au pic de l&apos;écran actuel</value>
+    <value>Réinitialiser au pic de l'écran actuel</value>
   </data>
   <data name="InspectorReset.Content" xml:space="preserve">
     <value>Réinitialiser</value>
@@ -449,16 +449,16 @@
     <value>Distribution du gamut</value>
   </data>
   <data name="GamutDistributionSubtitle.Text" xml:space="preserve">
-    <value>CIE 1931 xy · Couleurs d&apos;aperçu</value>
+    <value>CIE 1931 xy · Couleurs d'aperçu</value>
   </data>
   <data name="GamutRefreshAnalysis" xml:space="preserve">
-    <value>Actualiser l&apos;analyse du gamut</value>
+    <value>Actualiser l'analyse du gamut</value>
   </data>
   <data name="GamutRefreshToolTip" xml:space="preserve">
     <value>Analyser la zone visible actuelle</value>
   </data>
   <data name="GamutDiagramDescription" xml:space="preserve">
-    <value>Diagramme de chromaticité CIE 1931 xy montrant la distribution des couleurs, les limites du gamut et le point d&apos;échantillonnage</value>
+    <value>Diagramme de chromaticité CIE 1931 xy montrant la distribution des couleurs, les limites du gamut et le point d'échantillonnage</value>
   </data>
   <data name="GamutShowSrgbBoundary" xml:space="preserve">
     <value>Afficher les limites du gamut sRGB</value>
@@ -470,25 +470,25 @@
     <value>Afficher les limites du gamut BT.2020</value>
   </data>
   <data name="GamutSummaryText.Text" xml:space="preserve">
-    <value>Ouvrez une image et actualisez l&apos;analyse</value>
+    <value>Ouvrez une image et actualisez l'analyse</value>
   </data>
   <data name="GamutRecentSampleTitle.Text" xml:space="preserve">
     <value>Échantillon récent</value>
   </data>
   <data name="ChromaticitySampleText.Text" xml:space="preserve">
-    <value>Pointez sur l&apos;image pour afficher la position de la couleur</value>
+    <value>Pointez sur l'image pour afficher la position de la couleur</value>
   </data>
   <data name="ChromaticityGamutText.Text" xml:space="preserve">
-    <value>Le réticule indique le point d&apos;échantillonnage, D65 le blanc de référence</value>
+    <value>Le réticule indique le point d'échantillonnage, D65 le blanc de référence</value>
   </data>
   <data name="GamutAboutButton.Content" xml:space="preserve">
     <value>À propos du diagramme de gamut</value>
   </data>
   <data name="GamutAboutDescription.Text" xml:space="preserve">
-    <value>Le nuage de points représente la distribution des couleurs de la zone visible après mappage d&apos;affichage ; les points plus brillants indiquent une plus forte concentration. Il ne représente pas la couverture de gamut du fichier source ou de l&apos;écran. Le noir et les couleurs non valides sont exclus. Actualisez après tout zoom ou changement. Les couleurs d&apos;arrière-plan sont indicatives ; les coordonnées et limites sont calculées selon les normes.</value>
+    <value>Le nuage de points représente la distribution des couleurs de la zone visible après mappage d'affichage ; les points plus brillants indiquent une plus forte concentration. Il ne représente pas la couverture de gamut du fichier source ou de l'écran. Le noir et les couleurs non valides sont exclus. Actualisez après tout zoom ou changement. Les couleurs d'arrière-plan sont indicatives ; les coordonnées et limites sont calculées selon les normes.</value>
   </data>
   <data name="GamutCieNotice.Text" xml:space="preserve">
-    <value>Lieu spectral : données de l&apos;observateur colorimétrique standard CIE 2019, CIE 1931 ; converties de 380 à 700 nm par pas de 5 nm. CC BY-SA 4.0.</value>
+    <value>Lieu spectral : données de l'observateur colorimétrique standard CIE 2019, CIE 1931 ; converties de 380 à 700 nm par pas de 5 nm. CC BY-SA 4.0.</value>
   </data>
   <data name="GamutCieDataSource.Content" xml:space="preserve">
     <value>Données et sources CIE</value>
@@ -500,16 +500,16 @@
     <value>Zone actuellement visible · Après mappage</value>
   </data>
   <data name="HistogramRefresh" xml:space="preserve">
-    <value>Actualiser l&apos;analyse de luminance</value>
+    <value>Actualiser l'analyse de luminance</value>
   </data>
   <data name="HistogramRefreshToolTip" xml:space="preserve">
-    <value>Actualiser l&apos;histogramme et l&apos;échantillonnage de pixels</value>
+    <value>Actualiser l'histogramme et l'échantillonnage de pixels</value>
   </data>
   <data name="HistogramDescription" xml:space="preserve">
     <value>Histogramme RVB, SDR à gauche, hautes lumières HDR à droite</value>
   </data>
   <data name="HistogramEmptyText.Text" xml:space="preserve">
-    <value>Ouvrez une image et actualisez l&apos;analyse</value>
+    <value>Ouvrez une image et actualisez l'analyse</value>
   </data>
   <data name="HistogramWhiteText.Text" xml:space="preserve">
     <value>Échelle HDR +1 à +6 EV</value>
@@ -527,10 +527,10 @@
     <value>Aide à la visualisation</value>
   </data>
   <data name="AnalysisCloseAssist" xml:space="preserve">
-    <value>Fermer l&apos;aide à la visualisation</value>
+    <value>Fermer l'aide à la visualisation</value>
   </data>
   <data name="AnalysisCloseAssistToolTip" xml:space="preserve">
-    <value>Fermer l&apos;aide et restaurer l&apos;affichage d&apos;origine</value>
+    <value>Fermer l'aide et restaurer l'affichage d'origine</value>
   </data>
   <data name="AnalysisSplitScreen" xml:space="preserve">
     <value>Écran partagé HDR SDR</value>
@@ -554,13 +554,13 @@
     <value>Échantillonnage des pixels</value>
   </data>
   <data name="PixelSampleText.Text" xml:space="preserve">
-    <value>Après actualisation, pointez sur l&apos;image</value>
+    <value>Après actualisation, pointez sur l'image</value>
   </data>
   <data name="AnalysisAboutValuesButton.Content" xml:space="preserve">
-    <value>À propos des valeurs d&apos;analyse</value>
+    <value>À propos des valeurs d'analyse</value>
   </data>
   <data name="AnalysisAboutValuesDescription.Text" xml:space="preserve">
-    <value>Les courbes RVB proviennent de l&apos;aperçu scRGB après mappage d&apos;affichage. La moitié gauche est SDR (échelle sRGB), la ligne médiane étant le point blanc SDR ; chaque tiret à droite ajoute +1 EV, l&apos;extrémité droite stockant +6 EV et plus. Les canaux partagent l&apos;axe vertical avec racine carrée du nombre de pixels. Les valeurs négatives vont à l&apos;extrême gauche. Les mesures de luminance sont pondérées RVB. Actualisez après toute modification. La partie droite utilise le HDR adaptatif.</value>
+    <value>Les courbes RVB proviennent de l'aperçu scRGB après mappage d'affichage. La moitié gauche est SDR (échelle sRGB), la ligne médiane étant le point blanc SDR ; chaque tiret à droite ajoute +1 EV, l'extrémité droite stockant +6 EV et plus. Les canaux partagent l'axe vertical avec racine carrée du nombre de pixels. Les valeurs négatives vont à l'extrême gauche. Les mesures de luminance sont pondérées RVB. Actualisez après toute modification. La partie droite utilise le HDR adaptatif.</value>
   </data>
   <data name="BatchExportTitle" xml:space="preserve">
     <value>Exportation par lots</value>
@@ -584,10 +584,10 @@
     <value>Supprimer la sélection</value>
   </data>
   <data name="BatchExportClearToolTip" xml:space="preserve">
-    <value>Vider la file d&apos;attente</value>
+    <value>Vider la file d'attente</value>
   </data>
   <data name="BatchExportQueueList" xml:space="preserve">
-    <value>File d&apos;attente d&apos;exportation</value>
+    <value>File d'attente d'exportation</value>
   </data>
   <data name="BatchExportEmptyTitle.Text" xml:space="preserve">
     <value>Commencez par ajouter des images</value>
@@ -596,7 +596,7 @@
     <value>Cliquez sur Ajouter pour sélectionner plusieurs images à la fois</value>
   </data>
   <data name="BatchExportSettings.Text" xml:space="preserve">
-    <value>Paramètres d&apos;exportation</value>
+    <value>Paramètres d'exportation</value>
   </data>
   <data name="BatchExportFormat.Header" xml:space="preserve">
     <value>Format</value>
@@ -623,13 +623,13 @@
     <value>OpenEXR</value>
   </data>
   <data name="BatchFormatOriginal" xml:space="preserve">
-    <value>Conserver le format d&apos;origine</value>
+    <value>Conserver le format d'origine</value>
   </data>
   <data name="BatchFormatNoteSdr" xml:space="preserve">
     <value>Idéal pour le partage. Le HDR sera converti en SDR.</value>
   </data>
   <data name="BatchFormatNoteGainMap" xml:space="preserve">
-    <value>Compatible avec l&apos;affichage SDR tout en conservant le gain map HDR.</value>
+    <value>Compatible avec l'affichage SDR tout en conservant le gain map HDR.</value>
   </data>
   <data name="BatchFormatNotePq" xml:space="preserve">
     <value>PQ 16 bits, couleurs BT.2020.</value>
@@ -656,16 +656,16 @@
     <value>Numérotation automatique en cas de doublon sans écraser le fichier source.</value>
   </data>
   <data name="BatchExportHelpButton.Content" xml:space="preserve">
-    <value>Notes d&apos;exportation</value>
+    <value>Notes d'exportation</value>
   </data>
   <data name="BatchExportHelpContent.Text" xml:space="preserve">
-    <value>Les tâches s&apos;exécutent séquentiellement ; les échecs n&apos;arrêtent pas la suite. Fermer la fenêtre annule les tâches restantes. Le SDR utilise un mappage tonal fixe sans conserver les métadonnées EXIF ou vidéo.</value>
+    <value>Les tâches s'exécutent séquentiellement ; les échecs n'arrêtent pas la suite. Fermer la fenêtre annule les tâches restantes. Le SDR utilise un mappage tonal fixe sans conserver les métadonnées EXIF ou vidéo.</value>
   </data>
   <data name="BatchExportReady" xml:space="preserve">
     <value>Prêt</value>
   </data>
   <data name="BatchExportSelectFolderPrompt" xml:space="preserve">
-    <value>Veuillez d&apos;abord sélectionner un dossier de sortie.</value>
+    <value>Veuillez d'abord sélectionner un dossier de sortie.</value>
   </data>
   <data name="BatchExportRetry.Content" xml:space="preserve">
     <value>Réessayer les éléments incomplets</value>
@@ -674,7 +674,7 @@
     <value>Annuler</value>
   </data>
   <data name="BatchExportStart.Content" xml:space="preserve">
-    <value>Démarrer l&apos;exportation</value>
+    <value>Démarrer l'exportation</value>
   </data>
   <data name="BatchExportProgressFormat" xml:space="preserve">
     <value>Terminé {0} sur {1}</value>
@@ -707,7 +707,7 @@
     <value>Préparation des fichiers</value>
   </data>
   <data name="ExportOverlayCancel.Content" xml:space="preserve">
-    <value>Annuler l&apos;exportation</value>
+    <value>Annuler l'exportation</value>
   </data>
   <data name="DeleteDialogTitleFormat" xml:space="preserve">
     <value>Supprimer « {0} » ?</value>
@@ -725,7 +725,7 @@
     <value>OK</value>
   </data>
   <data name="DialogCannotSaveCropTitle" xml:space="preserve">
-    <value>Impossible d&apos;enregistrer l&apos;image rognée</value>
+    <value>Impossible d'enregistrer l'image rognée</value>
   </data>
   <data name="StatusMovedToRecycleBinFormat" xml:space="preserve">
     <value>{0} déplacé vers la corbeille</value>
@@ -734,25 +734,25 @@
     <value>Échec de la suppression : {0} : {1}</value>
   </data>
   <data name="StatusSaveAsNoExtension" xml:space="preserve">
-    <value>Échec de l&apos;enregistrement : le fichier source n&apos;a pas d&apos;extension</value>
+    <value>Échec de l'enregistrement : le fichier source n'a pas d'extension</value>
   </data>
   <data name="StatusSaveAsSameFile" xml:space="preserve">
     <value>Enregistrement annulé : la destination est identique au fichier source</value>
   </data>
   <data name="StatusSaveAsOriginalFormat" xml:space="preserve">
-    <value>Enregistré au format d&apos;origine : {0}</value>
+    <value>Enregistré au format d'origine : {0}</value>
   </data>
   <data name="StatusSaveAsCancelled" xml:space="preserve">
-    <value>Exportation annulée ; le fichier cible n&apos;a pas été modifié.</value>
+    <value>Exportation annulée ; le fichier cible n'a pas été modifié.</value>
   </data>
   <data name="StatusSaveAsFailedFormat" xml:space="preserve">
-    <value>Échec de l&apos;enregistrement : {0} : {1}</value>
+    <value>Échec de l'enregistrement : {0} : {1}</value>
   </data>
   <data name="StatusImageCopiedFormat" xml:space="preserve">
     <value>Image copiée, prête à être collée dans PowerPoint : {0}</value>
   </data>
   <data name="StatusCopyImageFailedFormat" xml:space="preserve">
-    <value>Échec de la copie de l&apos;image : {0} : {1}</value>
+    <value>Échec de la copie de l'image : {0} : {1}</value>
   </data>
   <data name="StatusPathCopiedFormat" xml:space="preserve">
     <value>Chemin du fichier copié : {0}</value>
@@ -761,40 +761,40 @@
     <value>Échec de la copie du chemin : {0} : {1}</value>
   </data>
   <data name="DragDropOpenCaption" xml:space="preserve">
-    <value>Ouvrir l&apos;image</value>
+    <value>Ouvrir l'image</value>
   </data>
   <data name="StatusDragDropNoSupportedFiles" xml:space="preserve">
     <value>Glisser-déposer annulé : aucun fichier image pris en charge.</value>
   </data>
   <data name="StatusDragDropFailedFormat" xml:space="preserve">
-    <value>Échec de l&apos;ouverture par glisser-déposer : {0} : {1}</value>
+    <value>Échec de l'ouverture par glisser-déposer : {0} : {1}</value>
   </data>
   <data name="StatusDragDropLoadedCountFormat" xml:space="preserve">
-    <value>{0} images déposées ; navigation dans l&apos;ordre de dépôt</value>
+    <value>{0} images déposées ; navigation dans l'ordre de dépôt</value>
   </data>
   <data name="StatusSystemAssociationOpened" xml:space="preserve">
-    <value>Ouvert à partir de l&apos;association de fichiers système</value>
+    <value>Ouvert à partir de l'association de fichiers système</value>
   </data>
   <data name="StatusSystemAssociationOpenedCountFormat" xml:space="preserve">
-    <value>{0} images ouvertes à partir de l&apos;association système</value>
+    <value>{0} images ouvertes à partir de l'association système</value>
   </data>
   <data name="StatusOpenFailedFormat" xml:space="preserve">
-    <value>Échec de l&apos;ouverture : {0} : {1}</value>
+    <value>Impossible d'ouvrir {0} : {1} : {2}</value>
   </data>
   <data name="StatusLoadingFullResolution" xml:space="preserve">
-    <value>Chargement de la résolution d&apos;origine pour affichage 1:1...</value>
+    <value>Chargement de la résolution d'origine pour affichage 1:1...</value>
   </data>
   <data name="StatusCropSavedFailedFormat" xml:space="preserve">
-    <value>Échec de l&apos;enregistrement du rognage : {0}</value>
+    <value>Échec de l'enregistrement du rognage : {0}</value>
   </data>
   <data name="StatusRendererResizeFailedFormat" xml:space="preserve">
     <value>Échec du redimensionnement du moteur de rendu : {0} : {1}</value>
   </data>
   <data name="StatusPageLoadFailedFormat" xml:space="preserve">
-    <value>Échec du chargement de la page d&apos;accueil : {0} : {1}</value>
+    <value>Échec du chargement de la page d'accueil : {0} : {1}</value>
   </data>
   <data name="ErrorMainWindowNotInit" xml:space="preserve">
-    <value>La fenêtre principale n&apos;est pas initialisée ; impossible d&apos;afficher le sélecteur.</value>
+    <value>La fenêtre principale n'est pas initialisée ; impossible d'afficher le sélecteur.</value>
   </data>
   <data name="ExifNoMetadata" xml:space="preserve">
     <value>Aucune métadonnée EXIF</value>
@@ -854,10 +854,10 @@
     <value>Live</value>
   </data>
   <data name="AppxManifestDisplayName" xml:space="preserve">
-    <value>Visionneuse d&apos;images HDR</value>
+    <value>Visionneuse d'images HDR</value>
   </data>
   <data name="AppxManifestDescription" xml:space="preserve">
-    <value>Visionneuse d&apos;images basée sur WinUI 3 et la surface de rendu DirectX HDR</value>
+    <value>Visionneuse d'images basée sur WinUI 3 et la surface de rendu DirectX HDR</value>
   </data>
   <data name="AppxManifestFileTypeHdrImage" xml:space="preserve">
     <value>Image HDR</value>
@@ -884,28 +884,28 @@
     <value>Échec de la lecture de la Live Photo : {0}</value>
   </data>
   <data name="GamutPointerNotValidArea" xml:space="preserve">
-    <value>Le pointeur est hors de la zone d&apos;image valide</value>
+    <value>Le pointeur est hors de la zone d'image valide</value>
   </data>
   <data name="GamutBlackOrInvalid" xml:space="preserve">
     <value>Noir ou couleur non valide ; pas de coordonnées xy valides</value>
   </data>
   <data name="AnalysisSdrNotSupported" xml:space="preserve">
-    <value>L&apos;image utilise un aperçu standard ; outils HDR indisponibles.</value>
+    <value>L'image utilise un aperçu standard ; outils HDR indisponibles.</value>
   </data>
   <data name="GamutChangedRefreshPrompt" xml:space="preserve">
-    <value>La vue a changé ; actualisez l&apos;analyse du gamut</value>
+    <value>La vue a changé ; actualisez l'analyse du gamut</value>
   </data>
   <data name="AnalysisNoHdrPreview" xml:space="preserve">
-    <value>L&apos;image n&apos;est pas rendue en HDR ; impossible de lire les valeurs scRGB.</value>
+    <value>L'image n'est pas rendue en HDR ; impossible de lire les valeurs scRGB.</value>
   </data>
   <data name="AnalysisPixelCountFormat" xml:space="preserve">
-    <value>{0} pixels d&apos;aperçu analysés</value>
+    <value>{0} pixels d'aperçu analysés</value>
   </data>
   <data name="HistogramSdrWhiteFormat" xml:space="preserve">
     <value>Point blanc SDR {0} nits</value>
   </data>
   <data name="PixelSampleInstruction" xml:space="preserve">
-    <value>Pointez sur l&apos;image pour échantillonner</value>
+    <value>Pointez sur l'image pour échantillonner</value>
   </data>
   <data name="GamutColorCountFormat" xml:space="preserve">
     <value>{0} pixels couleur · Les points plus clairs indiquent une densité plus élevée</value>
@@ -917,23 +917,23 @@
     <value>Vue non prête ; veuillez réessayer.</value>
   </data>
   <data name="PixelSampleChangedPrompt" xml:space="preserve">
-    <value>Vue modifiée ; actualisez l&apos;analyse avant d&apos;échantillonner.</value>
+    <value>Vue modifiée ; actualisez l'analyse avant d'échantillonner.</value>
   </data>
   <data name="PixelSampleFormat" xml:space="preserve">
     <value>Aperçu ({0}, {1}) · {2} nits
 scRGB linéaire {3}, {4}, {5}</value>
   </data>
   <data name="PixelSampleOutOfBounds" xml:space="preserve">
-    <value>Le curseur est hors de la zone d&apos;image valide</value>
+    <value>Le curseur est hors de la zone d'image valide</value>
   </data>
   <data name="ViewExitFullScreen" xml:space="preserve">
     <value>Quitter le plein écran</value>
   </data>
   <data name="InspectorToggleHide" xml:space="preserve">
-    <value>Masquer le panneau d&apos;informations (I)</value>
+    <value>Masquer le panneau d'informations (I)</value>
   </data>
   <data name="InspectorToggleShow" xml:space="preserve">
-    <value>Afficher le panneau d&apos;informations (I)</value>
+    <value>Afficher le panneau d'informations (I)</value>
   </data>
   <data name="ZoomModeFill" xml:space="preserve">
     <value>Remplir</value>
@@ -954,13 +954,13 @@ scRGB linéaire {3}, {4}, {5}</value>
     <value>Absolu</value>
   </data>
   <data name="StatusExportCancelling" xml:space="preserve">
-    <value>Annulation en cours, attente de la fin de l&apos;opération...</value>
+    <value>Annulation en cours, attente de la fin de l'opération...</value>
   </data>
   <data name="StatusExportAlreadyInProgress" xml:space="preserve">
     <value>Une exportation est déjà en cours ; veuillez patienter ou fermer la boîte de dialogue ouverte.</value>
   </data>
   <data name="ErrorCropBoundsInvalid" xml:space="preserve">
-    <value>Le cadre de rognage ne couvre pas une zone d&apos;image valide ; veuillez le réajuster.</value>
+    <value>Le cadre de rognage ne couvre pas une zone d'image valide ; veuillez le réajuster.</value>
   </data>
   <data name="StatusWritingSdrCropFormat" xml:space="preserve">
     <value>Écriture du rognage SDR : {0}</value>
@@ -993,19 +993,19 @@ scRGB linéaire {3}, {4}, {5}</value>
     <value>Échec du rognage fidèle Gain Map : {0}</value>
   </data>
   <data name="StatusUltraHdrConvertUnavailable" xml:space="preserve">
-    <value>Convertir en Ultra HDR indisponible : aucune donnée gain map ou HDR monocouche reconstructible.</value>
+    <value>Conversion en Gain Map HDR indisponible : le fichier actuel n'a pas de gain-map reconstructible ou de données HDR monocouche.</value>
   </data>
   <data name="StatusGeneratingUltraHdrFormat" xml:space="preserve">
-    <value>Génération d&apos;Ultra HDR : {0}</value>
+    <value>Génération d'Ultra HDR : {0}</value>
   </data>
   <data name="StatusEncodingGainMapFormat" xml:space="preserve">
-    <value>Encodage du JPEG gain map {0}</value>
+    <value>Encodage de {0} Gain Map</value>
   </data>
   <data name="StatusExportedUltraHdrFormat" xml:space="preserve">
-    <value>Converti en Ultra HDR : {0} ; {1}</value>
+    <value>Converti en Gain Map HDR : {0} ; {1}</value>
   </data>
   <data name="StatusUltraHdrConvertFailedFormat" xml:space="preserve">
-    <value>Échec de la conversion en Ultra HDR : {0}</value>
+    <value>Échec de la conversion en Gain Map HDR : {0}</value>
   </data>
   <data name="StatusGeneratingSingleLayerHdrFormat" xml:space="preserve">
     <value>Génération du HDR monocouche {0} : {1}</value>
@@ -1017,13 +1017,13 @@ scRGB linéaire {3}, {4}, {5}</value>
     <value>HDR monocouche {0} exporté : {1} ; {2} ; {3}x{4}</value>
   </data>
   <data name="StatusSingleLayerHdrExportFailedFormat" xml:space="preserve">
-    <value>Échec de l&apos;exportation du rognage HDR monocouche : {0}</value>
+    <value>Échec de l'exportation du rognage HDR monocouche : {0}</value>
   </data>
   <data name="StatusSaveAsHdrUnavailable" xml:space="preserve">
     <value>Enregistrer en HDR indisponible : aucune donnée gain map ou HDR monocouche reconstructible.</value>
   </data>
   <data name="SaveAsDialogExportMode" xml:space="preserve">
-    <value>Mode d&apos;exportation</value>
+    <value>Mode d'exportation</value>
   </data>
   <data name="SaveAsDialogSingleLayerCurve" xml:space="preserve">
     <value>Courbe HDR monocouche</value>
@@ -1059,10 +1059,10 @@ scRGB linéaire {3}, {4}, {5}</value>
     <value>Continuer</value>
   </data>
   <data name="SaveAsAutoEstimateFormat" xml:space="preserve">
-    <value>Estimation auto : {0} % (conforme à l&apos;aperçu)</value>
+    <value>Estimation auto : {0} % (conforme à l'aperçu)</value>
   </data>
   <data name="SaveAsAutoEstimateUnavailable" xml:space="preserve">
-    <value>Estimation auto : impossible depuis les métadonnées ; paramètres d&apos;aperçu utilisés</value>
+    <value>Estimation auto : impossible depuis les métadonnées ; paramètres d'aperçu utilisés</value>
   </data>
   <data name="StatusPreparingFullHdrPixels" xml:space="preserve">
     <value>Préparation des pixels HDR en pleine résolution et encodage</value>
@@ -1074,10 +1074,10 @@ scRGB linéaire {3}, {4}, {5}</value>
     <value>Enregistré sous {0} : {1} ; {2}</value>
   </data>
   <data name="StatusSaveAsHdrFailedFormat" xml:space="preserve">
-    <value>Échec de l&apos;enregistrement HDR : {0}</value>
+    <value>Échec de l'enregistrement HDR : {0}</value>
   </data>
   <data name="SaveAsModeUltraHdrConvert" xml:space="preserve">
-    <value>Convertir en JPEG Ultra HDR / gain map</value>
+    <value>Convertir en Gain Map HDR</value>
   </data>
   <data name="SaveAsModeGainMapPreserve" xml:space="preserve">
     <value>Enregistrement fidèle Gain Map</value>
@@ -1086,16 +1086,16 @@ scRGB linéaire {3}, {4}, {5}</value>
     <value>HDR monocouche</value>
   </data>
   <data name="StatusCropModeGainMapPreserve" xml:space="preserve">
-    <value>Mode d&apos;exportation : rognage fidèle Gain Map avec conservation des paramètres de mappage</value>
+    <value>Mode d'exportation : rognage fidèle Gain Map avec conservation des paramètres de mappage</value>
   </data>
   <data name="StatusCropModeUltraHdrConvertFormat" xml:space="preserve">
-    <value>Mode d&apos;exportation : conversion en Ultra HDR avec régénération de base SDR, gain map {0} et métadonnées</value>
+    <value>Mode d'exportation : Convertir en Gain Map HDR, régénération de la base SDR, du gainmap {0} et des métadonnées à partir du HDR reconstruit</value>
   </data>
   <data name="StatusCropModeSingleLayerHdrFormat" xml:space="preserve">
-    <value>Mode d&apos;exportation : conversion HDR monocouche, cible {0} ; JXR écrit en scRGB, JXL/AVIF/HEIF écrivent les métadonnées</value>
+    <value>Mode d'exportation : conversion HDR monocouche, cible {0} ; JXR écrit en scRGB, JXL/AVIF/HEIF écrivent les métadonnées</value>
   </data>
   <data name="StatusCropModeSdrPreview" xml:space="preserve">
-    <value>Mode d&apos;exportation : aperçu SDR avec BitmapEncoder système pour le rognage sRGB</value>
+    <value>Mode d'exportation : aperçu SDR avec BitmapEncoder système pour le rognage sRGB</value>
   </data>
   <data name="SaveAsGainMapMonoLabel" xml:space="preserve">
     <value>Monochrome</value>
@@ -1116,7 +1116,7 @@ scRGB linéaire {3}, {4}, {5}</value>
     <value>Analyse de luminance et comparaison HDR</value>
   </data>
   <data name="TopToolbarToggleInspector" xml:space="preserve">
-    <value>Basculer le panneau d&apos;informations</value>
+    <value>Basculer le panneau d'informations</value>
   </data>
   <data name="TopToolbarCrop" xml:space="preserve">
     <value>Rogner</value>
@@ -1140,31 +1140,31 @@ scRGB linéaire {3}, {4}, {5}</value>
     <value>Rognage fidèle Gain Map non connecté à un backend inscriptible : nécessite libultrahdr scénario 4 pour réempaqueter base + gain map. Zone {0},{1} {2}x{3} calculée ; aucun fichier généré. {4}</value>
   </data>
   <data name="StatusUltraHdrNoBackendFormat" xml:space="preserve">
-    <value>Conversion en Ultra HDR non connectée à un backend inscriptible : {0} nécessite libultrahdr/libavif/libheif pour écrire les métadonnées. Zone {1},{2} {3}x{4} calculée ; aucun fichier généré. {5}</value>
+    <value>Conversion en Gain Map HDR sans backend accessible en écriture : {0} nécessite libultrahdr/libavif/libheif pour écrire les métadonnées gain-map. Région de recadrage {1},{2} {3}x{4} calculée ; boîte de dialogue non affichée, aucun fichier généré. {5}</value>
   </data>
   <data name="StatusSingleLayerHdrNoBackendFormat" xml:space="preserve">
     <value>Rognage HDR monocouche non connecté à un backend inscriptible : nécessite les outils natifs libjxl/libavif/libheif. Zone {0},{1} {2}x{3} calculée ; aucun fichier généré. {4}</value>
   </data>
   <data name="StatusSaveAsNoBackendFormat" xml:space="preserve">
-    <value>{0} n&apos;est pas encore connecté à un backend inscriptible. {1}</value>
+    <value>{0} n'est pas encore connecté à un backend inscriptible. {1}</value>
   </data>
   <data name="ExceptionGainMapPreserveNotSupported" xml:space="preserve">
-    <value>L&apos;enregistrement fidèle Gain Map ne prend en charge que les images avec gain map JPEG.</value>
+    <value>L'enregistrement fidèle Gain Map ne prend en charge que les images avec gain map JPEG.</value>
   </data>
   <data name="StatusSystemAssociationNotHandled" xml:space="preserve">
-    <value>Demande d&apos;ouverture système non traitée : aucun fichier image pris en charge identifié.</value>
+    <value>Demande d'ouverture système non traitée : aucun fichier image pris en charge identifié.</value>
   </data>
   <data name="StatusLoadingFullResolutionFailedFormat" xml:space="preserve">
-    <value>Échec du chargement de la résolution d&apos;origine : {0}: {1}</value>
+    <value>Échec du chargement de la résolution d'origine : {0}: {1}</value>
   </data>
   <data name="WorkspaceCompanionVideoNoMetadata" xml:space="preserve">
     <value>Aucune métadonnée HDR/couleur localisée dans la vidéo associée</value>
   </data>
   <data name="WorkspaceNotGainMapCandidate" xml:space="preserve">
-    <value>Ce n&apos;est pas un fichier candidat gain map JPEG/HEIF.</value>
+    <value>Ce n'est pas un fichier candidat gain map JPEG/HEIF.</value>
   </data>
   <data name="WorkspaceUltraHdrDetected" xml:space="preserve">
-    <value>Gain map Ultra HDR détectée ; reconstruction par décodage de base SDR avec gestion de l&apos;espace colorimétrique, orientation EXIF et nuanceur de pixels D3D11.</value>
+    <value>Gain map Ultra HDR détectée ; reconstruction par décodage de base SDR avec gestion de l'espace colorimétrique, orientation EXIF et nuanceur de pixels D3D11.</value>
   </data>
   <data name="WorkspaceHeifGainMapDetected" xml:space="preserve">
     <value>Image auxiliaire gain map HEIF détectée ; reconstruction via base SDR avec gestion de couleur, décodage libheif et nuanceur de pixels D3D11.</value>
@@ -1188,21 +1188,54 @@ scRGB linéaire {3}, {4}, {5}</value>
     <value>Échec du redimensionnement du moteur de rendu : {0} : {1}</value>
   </data>
   <data name="AnalysisErrorTooLarge" xml:space="preserve">
-    <value>L&apos;aperçu dépasse 8,5 mégapixels ; réduisez la fenêtre avant d&apos;analyser.</value>
+    <value>L'aperçu dépasse 8,5 mégapixels ; réduisez la fenêtre avant d'analyser.</value>
   </data>
   <data name="BatchQueueRunningCannotAdd" xml:space="preserve">
-    <value>La file d&apos;attente est en cours d&apos;exécution ; impossible d&apos;ajouter des fichiers pour l&apos;instant.</value>
+    <value>La file d'attente est en cours d'exécution ; impossible d'ajouter des fichiers pour l'instant.</value>
   </data>
   <data name="BatchQueueStillRunning" xml:space="preserve">
-    <value>La file d&apos;attente est toujours en cours d&apos;exécution.</value>
+    <value>La file d'attente est toujours en cours d'exécution.</value>
   </data>
   <data name="BatchQueueAlreadyRunning" xml:space="preserve">
-    <value>La file d&apos;attente est déjà en cours d&apos;exécution.</value>
+    <value>La file d'attente est déjà en cours d'exécution.</value>
   </data>
   <data name="ExifDateModified" xml:space="preserve">
     <value>Date de modification</value>
   </data>
   <data name="ExportFileEmptyNotReplaced" xml:space="preserve">
-    <value>Le fichier exporté est vide ; le fichier de destination n&apos;a pas été remplacé.</value>
+    <value>Le fichier exporté est vide ; le fichier de destination n'a pas été remplacé.</value>
+  </data>
+  <data name="BatchFormatGainMapHeic" xml:space="preserve">
+    <value>HEIC · Gain Map</value>
+  </data>
+  <data name="BatchFormatGainMapAvif" xml:space="preserve">
+    <value>AVIF · Gain Map</value>
+  </data>
+  <data name="CropUltraHdrBaseGamutP3" xml:space="preserve">
+    <value>Base P3 · Auto</value>
+  </data>
+  <data name="AnalysisAnalyzingPreview" xml:space="preserve">
+    <value>Analyse de l'image actuelle…</value>
+  </data>
+  <data name="SaveAsGamutDisplayP3AutoToneMapping" xml:space="preserve">
+    <value>Display P3 (mappage tonal automatique)</value>
+  </data>
+  <data name="InspectorSectionSelectorName" xml:space="preserve">
+    <value>Panneau de détails et d'analyse</value>
+  </data>
+  <data name="ExceptionImageDisplayAreaNotReady" xml:space="preserve">
+    <value>La zone d'affichage de l'image n'est pas encore prête.</value>
+  </data>
+  <data name="ExceptionImageDisplayAreaInvalidSize" xml:space="preserve">
+    <value>Taille de la zone d'affichage de l'image non valide.</value>
+  </data>
+  <data name="LivePhotoPreparing" xml:space="preserve">
+    <value>Préparation de la Live Photo · Cliquer pour annuler</value>
+  </data>
+  <data name="StatusSkippedUnopenableFilesFormat" xml:space="preserve">
+    <value>Fichiers impossibles à ouvrir ignorés : {0}</value>
+  </data>
+  <data name="FilmstripThumbnailLoadErrorFormat" xml:space="preserve">
+    <value>{0} · Aperçu indisponible, cliquer pour ouvrir</value>
   </data>
 </root>

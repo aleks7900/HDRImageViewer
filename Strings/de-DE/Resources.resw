@@ -779,7 +779,7 @@
     <value>{0} Bilder über Systemdateizuordnung geöffnet</value>
   </data>
   <data name="StatusOpenFailedFormat" xml:space="preserve">
-    <value>Öffnen fehlgeschlagen: {0}: {1}</value>
+    <value>Fehler beim Öffnen von {0}: {1}: {2}</value>
   </data>
   <data name="StatusLoadingFullResolution" xml:space="preserve">
     <value>Volle Auflösung für 1:1-Anzeige wird geladen...</value>
@@ -993,19 +993,19 @@ Lineares scRGB {3}, {4}, {5}</value>
     <value>Verlustfreier Gain-Map-Zuschnitt fehlgeschlagen: {0}</value>
   </data>
   <data name="StatusUltraHdrConvertUnavailable" xml:space="preserve">
-    <value>In Ultra HDR konvertieren nicht verfügbar: Datei enthält keine rekonstruierbaren Gain-Map- oder Single-Layer-HDR-Daten.</value>
+    <value>Konvertierung in Gain Map HDR nicht verfügbar: Aktuelle Datei enthält keine rekonstruierbaren Gain-Map- oder Single-Layer-HDR-Daten.</value>
   </data>
   <data name="StatusGeneratingUltraHdrFormat" xml:space="preserve">
     <value>Ultra HDR wird erzeugt: {0}</value>
   </data>
   <data name="StatusEncodingGainMapFormat" xml:space="preserve">
-    <value>{0} Gain-Map-JPEG wird codiert</value>
+    <value>Kodierung von {0} Gain Map</value>
   </data>
   <data name="StatusExportedUltraHdrFormat" xml:space="preserve">
-    <value>In Ultra HDR konvertiert: {0}; {1}</value>
+    <value>In Gain Map HDR konvertiert: {0}; {1}</value>
   </data>
   <data name="StatusUltraHdrConvertFailedFormat" xml:space="preserve">
-    <value>Konvertierung in Ultra HDR fehlgeschlagen: {0}</value>
+    <value>Fehler beim Konvertieren in Gain Map HDR: {0}</value>
   </data>
   <data name="StatusGeneratingSingleLayerHdrFormat" xml:space="preserve">
     <value>Single-Layer HDR {0} wird erzeugt: {1}</value>
@@ -1077,7 +1077,7 @@ Lineares scRGB {3}, {4}, {5}</value>
     <value>HDR-Speichern unter fehlgeschlagen: {0}</value>
   </data>
   <data name="SaveAsModeUltraHdrConvert" xml:space="preserve">
-    <value>In Ultra HDR / Gain-Map-JPEG konvertieren</value>
+    <value>In Gain Map HDR konvertieren</value>
   </data>
   <data name="SaveAsModeGainMapPreserve" xml:space="preserve">
     <value>Verlustfreies Gain-Map-Speichern unter</value>
@@ -1089,7 +1089,7 @@ Lineares scRGB {3}, {4}, {5}</value>
     <value>Exportmodus: Verlustfreier Gain-Map-Zuschnitt unter Beibehaltung der Mapping-Parameter</value>
   </data>
   <data name="StatusCropModeUltraHdrConvertFormat" xml:space="preserve">
-    <value>Exportmodus: In Ultra HDR konvertieren, SDR-Basis, {0} Gain-Map und Metadaten werden neu generiert</value>
+    <value>Exportmodus: In Gain Map HDR konvertieren, SDR-Base, {0} Gain-Map und Metadaten aus rekonstruiertem HDR neu erzeugen</value>
   </data>
   <data name="StatusCropModeSingleLayerHdrFormat" xml:space="preserve">
     <value>Exportmodus: Single-Layer HDR-Konvertierung, Ziel {0}; JXR schreibt scRGB, JXL/AVIF/HEIF schreiben Transfer-Metadaten</value>
@@ -1140,7 +1140,7 @@ Lineares scRGB {3}, {4}, {5}</value>
     <value>Verlustfreier Gain-Map-Zuschnitt hat kein beschreibbares Backend: erfordert libultrahdr Szenario 4 zur Repackung von Base + Gain-Map. Bereich {0},{1} {2}x{3} berechnet; keine Datei erzeugt. {4}</value>
   </data>
   <data name="StatusUltraHdrNoBackendFormat" xml:space="preserve">
-    <value>In Ultra HDR konvertieren hat kein beschreibbares Backend: {0} erfordert libultrahdr/libavif/libheif zum Schreiben von Gain-Map-Metadaten. Bereich {1},{2} {3}x{4} berechnet; keine Datei erzeugt. {5}</value>
+    <value>Konvertierung in Gain Map HDR hat kein schreibbares Backend: {0} erfordert libultrahdr/libavif/libheif zum Schreiben von Gain-Map-Metadaten. Zuschneidebereich {1},{2} {3}x{4} berechnet; Speichern-Dialog nicht angezeigt, keine Datei erstellt. {5}</value>
   </data>
   <data name="StatusSingleLayerHdrNoBackendFormat" xml:space="preserve">
     <value>Single-Layer-HDR-Zuschnitt hat kein beschreibbares Backend: erfordert native libjxl/libavif/libheif Tools. Bereich {0},{1} {2}x{3} berechnet; keine Datei erzeugt. {4}</value>
@@ -1204,5 +1204,38 @@ Lineares scRGB {3}, {4}, {5}</value>
   </data>
   <data name="ExportFileEmptyNotReplaced" xml:space="preserve">
     <value>Exportierte Datei ist leer; Zieldatei wurde nicht ersetzt.</value>
+  </data>
+  <data name="BatchFormatGainMapHeic" xml:space="preserve">
+    <value>HEIC · Gain Map</value>
+  </data>
+  <data name="BatchFormatGainMapAvif" xml:space="preserve">
+    <value>AVIF · Gain Map</value>
+  </data>
+  <data name="CropUltraHdrBaseGamutP3" xml:space="preserve">
+    <value>Base P3 · Auto</value>
+  </data>
+  <data name="AnalysisAnalyzingPreview" xml:space="preserve">
+    <value>Aktuelles Bild wird analysiert…</value>
+  </data>
+  <data name="SaveAsGamutDisplayP3AutoToneMapping" xml:space="preserve">
+    <value>Display P3 (Automatisches Tone Mapping)</value>
+  </data>
+  <data name="InspectorSectionSelectorName" xml:space="preserve">
+    <value>Details- und Analysebereich</value>
+  </data>
+  <data name="ExceptionImageDisplayAreaNotReady" xml:space="preserve">
+    <value>Bildanzeigebereich ist noch nicht bereit.</value>
+  </data>
+  <data name="ExceptionImageDisplayAreaInvalidSize" xml:space="preserve">
+    <value>Größe des Bildanzeigebereichs ist ungültig.</value>
+  </data>
+  <data name="LivePhotoPreparing" xml:space="preserve">
+    <value>Live Photo wird vorbereitet · Zum Abbrechen klicken</value>
+  </data>
+  <data name="StatusSkippedUnopenableFilesFormat" xml:space="preserve">
+    <value>Dateien übersprungen, die nicht geöffnet werden konnten: {0}</value>
+  </data>
+  <data name="FilmstripThumbnailLoadErrorFormat" xml:space="preserve">
+    <value>{0} · Vorschau nicht verfügbar, zum Öffnen klicken</value>
   </data>
 </root>

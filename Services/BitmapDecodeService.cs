@@ -117,7 +117,8 @@ public static class BitmapDecodeService
             maxPixelSize,
             allowHdrDownscale: true,
             preserveHdrTransfer: true,
-            cancellationToken);
+            cancellationToken,
+            preserveAlpha: true);
     }
 
     public static async Task<DecodedBitmap> DecodeDocumentForThumbnailAsync(
@@ -133,7 +134,8 @@ public static class BitmapDecodeService
             maxPixelSize,
             allowHdrDownscale: true,
             preserveHdrTransfer: true,
-            cancellationToken);
+            cancellationToken,
+            preserveAlpha: true);
     }
 
     public static async Task<DecodedBitmap> DecodeFileForHdrExportAsync(
@@ -215,19 +217,20 @@ public static class BitmapDecodeService
         int? maxPixelSize,
         bool allowHdrDownscale,
         bool preserveHdrTransfer,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool preserveAlpha = false)
     {
         var containerKind = await FileSignatureProbe.DetectAsync(path, cancellationToken);
         try
         {
             if (string.Equals(Path.GetExtension(path), ".jxl", StringComparison.OrdinalIgnoreCase))
             {
-                return await DecodeJxlAsync(path, jxlProbe, maxPixelSize, allowHdrDownscale, preserveHdrTransfer, cancellationToken);
+                return await DecodeJxlAsync(path, jxlProbe, maxPixelSize, allowHdrDownscale, preserveHdrTransfer, cancellationToken, preserveAlpha);
             }
 
             if (string.Equals(Path.GetExtension(path), ".exr", StringComparison.OrdinalIgnoreCase))
             {
-                return await DecodeExrWithNativeToolAsync(path, maxPixelSize, cancellationToken);
+                return await DecodeExrWithNativeToolAsync(path, maxPixelSize, preserveAlpha, cancellationToken);
             }
 
             if (DecoderCatalog.IsJpegXrExtension(Path.GetExtension(path)))
@@ -263,6 +266,10 @@ public static class BitmapDecodeService
                                 wicProbe.IsTiffBt2020,
                                 cancellationToken),
                             cancellationToken);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        throw;
                     }
                     catch
                     {
@@ -310,7 +317,8 @@ public static class BitmapDecodeService
                         : $"{wicProbe.DecoderName} high bit-depth{DescribeColorGamutSuffix(colorGamut)}",
                     maxPixelSize,
                     cancellationToken,
-                    colorGamut);
+                    colorGamut,
+                    preserveAlpha);
             }
 
             if (heifAvifProbe?.HasHdrTransfer == true)
@@ -324,9 +332,12 @@ public static class BitmapDecodeService
                 try
                 {
                     var bitmap = await Task.Run(
-                        () => DecodeHeifAvifHdrWithLibheif(path, heifAvifProbe, cancellationToken),
+                        () => DownscalePreviewBitmapIfNeeded(
+                            DecodeHeifAvifHdrWithLibheif(path, heifAvifProbe, cancellationToken),
+                            maxPixelSize,
+                            cancellationToken),
                         cancellationToken);
-                    return preserveHdrTransfer ? bitmap : ConvertHdrEncodedToLinearScRgb(bitmap, hlgTargetNits: 1000.0);
+                    return preserveHdrTransfer ? bitmap : ConvertHdrEncodedToLinearScRgb(bitmap, hlgTargetNits: 1000.0, cancellationToken);
                 }
                 catch (OperationCanceledException)
                 {
@@ -339,12 +350,16 @@ public static class BitmapDecodeService
 
                 try
                 {
-                    var bitmap = await DecodeHeifAvifHdrWithNativeToolAsync(path, heifAvifProbe, maxPixelSize, cancellationToken);
+                    var bitmap = await DecodeHeifAvifHdrWithNativeToolAsync(path, heifAvifProbe, maxPixelSize, cancellationToken, preserveAlpha);
                     if (libheifFallbackReason is not null)
                     {
                         bitmap = bitmap with { DecoderName = $"{bitmap.DecoderName} [fallback because {libheifFallbackReason}]" };
                     }
-                    return preserveHdrTransfer ? bitmap : ConvertHdrEncodedToLinearScRgb(bitmap, hlgTargetNits: 1000.0);
+                    return preserveHdrTransfer ? bitmap : ConvertHdrEncodedToLinearScRgb(bitmap, hlgTargetNits: 1000.0, cancellationToken);
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
                 }
                 catch
                 {
@@ -365,9 +380,9 @@ public static class BitmapDecodeService
                     {
                         bitmap = bitmap with { DecoderName = $"{bitmap.DecoderName} [fallback because {libheifFallbackReason}]" };
                     }
-                    return preserveHdrTransfer ? bitmap : ConvertHdrEncodedToLinearScRgb(bitmap, hlgTargetNits: 1000.0);
+                    return preserveHdrTransfer ? bitmap : ConvertHdrEncodedToLinearScRgb(bitmap, hlgTargetNits: 1000.0, cancellationToken);
                 }
-                catch (Exception ex)
+                catch (Exception ex) when (ex is not OperationCanceledException)
                 {
                     wicHalfFallbackFailure = ex;
                 }
@@ -384,7 +399,9 @@ public static class BitmapDecodeService
                         heifAvifProbe.HasBt2020,
                         $"Windows Imaging {DescribeHeifAvifCodec(path)} HDR",
                         maxPixelSize,
-                        cancellationToken);
+                        cancellationToken,
+                        GetHeifColorGamut(heifAvifProbe),
+                        preserveAlpha);
                     if (libheifFallbackReason is not null || wicHalfFallbackFailure is not null)
                     {
                         var reasons = new List<string>();
@@ -400,9 +417,9 @@ public static class BitmapDecodeService
 
                         bitmap = bitmap with { DecoderName = $"{bitmap.DecoderName} [fallback because {string.Join("; ", reasons)}]" };
                     }
-                    return preserveHdrTransfer ? bitmap : ConvertHdrEncodedToLinearScRgb(bitmap, hlgTargetNits: 1000.0);
+                    return preserveHdrTransfer ? bitmap : ConvertHdrEncodedToLinearScRgb(bitmap, hlgTargetNits: 1000.0, cancellationToken);
                 }
-                catch (Exception ex)
+                catch (Exception ex) when (ex is not OperationCanceledException)
                 {
                     winRtFallbackFailure = ex;
                 }
@@ -421,9 +438,10 @@ public static class BitmapDecodeService
                 usesBt2020Primaries: false,
                 "Windows Imaging",
                 maxPixelSize,
-                cancellationToken);
+                cancellationToken,
+                preserveAlpha: preserveAlpha);
         }
-        catch (Exception ex) when (containerKind == FileContainerKind.HeifFamily)
+        catch (Exception ex) when (containerKind == FileContainerKind.HeifFamily && ex is not OperationCanceledException)
         {
             throw new InvalidOperationException(
                 $"Windows Imaging {DescribeHeifAvifCodec(path)} decode failed ({ex.GetType().Name}: {ex.Message}). Install or repair the Windows HEIF/AVIF codec package to preview this file.",
@@ -519,6 +537,7 @@ public static class BitmapDecodeService
         var stride = plane.Stride;
         for (var y = 0; y < height; y++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             Marshal.Copy(IntPtr.Add(src, y * stride), pixels, y * rowBytes, rowBytes);
         }
 
@@ -527,7 +546,7 @@ public static class BitmapDecodeService
         {
             var leftShift = 16 - sourceBitDepth;
             var rightShift = sourceBitDepth - leftShift;
-            System.Threading.Tasks.Parallel.For(0, height, y =>
+            System.Threading.Tasks.Parallel.For(0, height, new ParallelOptions { CancellationToken = cancellationToken }, y =>
             {
                 var rowSamples = MemoryMarshal.Cast<byte, ushort>(pixels.AsSpan(y * rowBytes, rowBytes));
                 for (var i = 0; i < rowSamples.Length; i++)
@@ -633,7 +652,8 @@ public static class BitmapDecodeService
         string path,
         HeifAvifProbeResult probe,
         int? maxPixelSize,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool preserveAlpha = false)
     {
         var extension = Path.GetExtension(path);
         var isAvif = string.Equals(extension, ".avif", StringComparison.OrdinalIgnoreCase);
@@ -650,7 +670,7 @@ public static class BitmapDecodeService
         var pngPath = Path.Combine(tempDir, "decoded.png");
         try
         {
-            using var process = CreateNativeProcess(tool);
+            using var process = NativeProcessRunner.Create(tool);
             if (isAvif)
             {
                 process.StartInfo.ArgumentList.Add("-d");
@@ -664,7 +684,7 @@ public static class BitmapDecodeService
             process.StartInfo.ArgumentList.Add(path);
             process.StartInfo.ArgumentList.Add(pngPath);
             var spawnTimer = Stopwatch.StartNew();
-            await RunProcessAsync(process, isAvif ? "libavif avifdec" : "libheif heif-dec", cancellationToken);
+            await NativeProcessRunner.RunAsync(process, isAvif ? "libavif avifdec" : "libheif heif-dec", cancellationToken);
             var spawnMs = spawnTimer.ElapsedMilliseconds;
             var transfer = probe.TransferCharacteristics == 16 ? DecodedBitmapTransfer.Pq : DecodedBitmapTransfer.Hlg;
             var winrtTimer = Stopwatch.StartNew();
@@ -677,7 +697,9 @@ public static class BitmapDecodeService
                 probe.HasBt2020,
                 $"{(isAvif ? "libavif avifdec" : "libheif heif-dec")} [spawn+decode {spawnMs}ms]; {DescribeHdrTransfer(probe)} {DescribeContainerPrimaries(probe)}",
                 maxPixelSize,
-                cancellationToken);
+                cancellationToken,
+                GetHeifColorGamut(probe),
+                preserveAlpha);
             var winrtMs = winrtTimer.ElapsedMilliseconds;
             return bitmap with { DecoderName = $"{bitmap.DecoderName} [winrt png {winrtMs}ms]" };
         }
@@ -694,11 +716,16 @@ public static class BitmapDecodeService
         int? maxPixelSize,
         bool allowHdrDownscale,
         bool preserveHdrTransfer,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool preserveAlpha = false)
     {
         var info = knownInfo ?? await JxlProbe.ProbeAsync(path, cancellationToken)
             ?? new JxlProbeResult(true, null, null, null, "未知", "未知", null, null, "JPEG XL");
         var transfer = DecodeTransferFromJxl(info);
+        if (transfer == DecodedBitmapTransfer.LinearSceneScRgb)
+        {
+            return await DecodeLinearJxlWithDjxlAsync(path, info, allowHdrDownscale ? maxPixelSize : null, preserveAlpha, cancellationToken);
+        }
         string? nativeFallbackReason = null;
         if (transfer is DecodedBitmapTransfer.Pq or DecodedBitmapTransfer.Hlg)
         {
@@ -719,7 +746,7 @@ public static class BitmapDecodeService
                             cancellationToken),
                         cancellationToken);
                     bitmap = DownscalePreviewBitmapIfNeeded(bitmap, effectiveMaxPixelSize, cancellationToken);
-                    return preserveHdrTransfer ? bitmap : ConvertHdrEncodedToLinearScRgb(bitmap, info.IntensityTargetNits);
+                    return preserveHdrTransfer ? bitmap : ConvertHdrEncodedToLinearScRgb(bitmap, info.IntensityTargetNits, cancellationToken);
                 }
                 catch (OperationCanceledException)
                 {
@@ -732,7 +759,7 @@ public static class BitmapDecodeService
             }
         }
 
-        var fallback = await DecodeJxlWithDjxlAsync(path, info, maxPixelSize, allowHdrDownscale, preserveHdrTransfer, cancellationToken);
+        var fallback = await DecodeJxlWithDjxlAsync(path, info, maxPixelSize, allowHdrDownscale, preserveHdrTransfer, cancellationToken, preserveAlpha);
         return nativeFallbackReason is null
             ? fallback
             : fallback with { DecoderName = $"{fallback.DecoderName} [fallback because {nativeFallbackReason}]" };
@@ -744,7 +771,8 @@ public static class BitmapDecodeService
         int? maxPixelSize,
         bool allowHdrDownscale,
         bool preserveHdrTransfer,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool preserveAlpha = false)
     {
         var djxl = NativeToolLocator.FindTool("djxl.exe")
             ?? throw new InvalidOperationException("未找到 djxl.exe，无法预览 JPEG XL。请安装 libjxl 工具或把 djxl.exe 放到 PATH。");
@@ -762,9 +790,11 @@ public static class BitmapDecodeService
         var ppmPath = Path.Combine(tempDir, "decoded.ppm");
         try
         {
-            var useRawPpm = transfer != DecodedBitmapTransfer.Sdr;
+            // PPM has no alpha channel. Thumbnail requests retain it through
+            // 16-bit PNG; the export/preview PPM route remains unchanged.
+            var useRawPpm = transfer != DecodedBitmapTransfer.Sdr && !preserveAlpha;
             var outputPath = useRawPpm ? ppmPath : pngPath;
-            using var process = CreateNativeProcess(djxl);
+            using var process = NativeProcessRunner.Create(djxl);
             process.StartInfo.ArgumentList.Add(path);
             process.StartInfo.ArgumentList.Add(outputPath);
             process.StartInfo.ArgumentList.Add("--quiet");
@@ -772,6 +802,9 @@ public static class BitmapDecodeService
             {
                 process.StartInfo.ArgumentList.Add("--output_format");
                 process.StartInfo.ArgumentList.Add("ppm");
+            }
+            if (transfer != DecodedBitmapTransfer.Sdr)
+            {
                 process.StartInfo.ArgumentList.Add("--bits_per_sample");
                 process.StartInfo.ArgumentList.Add("16");
             }
@@ -782,7 +815,7 @@ public static class BitmapDecodeService
                 process.StartInfo.ArgumentList.Add(downsampling.ToString(CultureInfo.InvariantCulture));
             }
             var djxlTimer = Stopwatch.StartNew();
-            await RunProcessAsync(process, "libjxl djxl", cancellationToken);
+            await NativeProcessRunner.RunAsync(process, "libjxl djxl", cancellationToken);
             var djxlMs = djxlTimer.ElapsedMilliseconds;
 
             if (useRawPpm)
@@ -797,7 +830,7 @@ public static class BitmapDecodeService
                 var ppmMs = ppmTimer.ElapsedMilliseconds;
                 ppmBitmap = ppmBitmap with { DecoderName = $"{ppmBitmap.DecoderName} [read PPM {ppmMs}ms]" };
                 ppmBitmap = DownscalePreviewBitmapIfNeeded(ppmBitmap, maxPixelSize, cancellationToken);
-                return preserveHdrTransfer ? ppmBitmap : ConvertHdrEncodedToLinearScRgb(ppmBitmap, info.IntensityTargetNits);
+                return preserveHdrTransfer ? ppmBitmap : ConvertHdrEncodedToLinearScRgb(ppmBitmap, info.IntensityTargetNits, cancellationToken);
             }
 
             var winrtTimer = Stopwatch.StartNew();
@@ -810,15 +843,63 @@ public static class BitmapDecodeService
                 info.UsesBt2020Primaries,
                 $"libjxl djxl [djxl {djxlMs}ms, downsampling {downsampling}x]; {info.TransferSummary}; {info.ColorSummary}",
                 maxPixelSize,
-                cancellationToken);
+                cancellationToken,
+                preserveAlpha: preserveAlpha);
             var winrtMs = winrtTimer.ElapsedMilliseconds;
             bitmap = bitmap with { DecoderName = $"{bitmap.DecoderName} [temp PNG WinRT {winrtMs}ms]" };
-            return preserveHdrTransfer ? bitmap : ConvertHdrEncodedToLinearScRgb(bitmap, info.IntensityTargetNits);
+            return preserveHdrTransfer ? bitmap : ConvertHdrEncodedToLinearScRgb(bitmap, info.IntensityTargetNits, cancellationToken);
         }
         finally
         {
             TryDeleteFile(pngPath);
             TryDeleteFile(ppmPath);
+            TryDeleteDirectory(tempDir);
+        }
+    }
+
+    private static async Task<DecodedBitmap> DecodeLinearJxlWithDjxlAsync(
+        string path,
+        JxlProbeResult info,
+        int? maxPixelSize,
+        bool preserveAlpha,
+        CancellationToken cancellationToken)
+    {
+        var djxl = NativeToolLocator.FindTool("djxl.exe")
+            ?? throw new InvalidOperationException("未找到 djxl.exe，无法预览线性 HDR JPEG XL。");
+        var tempDir = Path.Combine(Path.GetTempPath(), "HdrImageViewer", "jxl-linear-decode-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        var exrPath = Path.Combine(tempDir, "decoded.exr");
+        try
+        {
+            // Integer PNG/PPM clamps floating-point HDR values to [0, 1]. EXR
+            // retains extended-range RGB and alpha; request linear BT.709 so
+            // wide-gamut JXL never relies on an EXR reader's default primaries.
+            using var process = NativeProcessRunner.Create(djxl);
+            foreach (var argument in new[] { path, exrPath, "--quiet", "--color_space=RGB_D65_SRG_Rel_Lin" })
+                process.StartInfo.ArgumentList.Add(argument);
+            var downsampling = CalculateJxlDownsampling(info, maxPixelSize);
+            if (downsampling > 1)
+            {
+                process.StartInfo.ArgumentList.Add("--downsampling");
+                process.StartInfo.ArgumentList.Add(downsampling.ToString(CultureInfo.InvariantCulture));
+            }
+            var timer = Stopwatch.StartNew();
+            await NativeProcessRunner.RunAsync(process, "libjxl djxl floating-point EXR", cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            // Keep the source EXR scene-linear units. Do not apply an sRGB
+            // curve, display-nits tone map, or the PFM fallback's scRGB tag.
+            var bitmap = await Task.Run(() => NativeExrDecoder.Decode(exrPath, maxPixelSize), cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            if (preserveAlpha) UnpremultiplyExrThumbnailPixels(bitmap, cancellationToken);
+            bitmap = DownscalePreviewBitmapIfNeeded(bitmap, maxPixelSize, cancellationToken);
+            return bitmap with
+            {
+                DecoderName = $"libjxl djxl [floating-point EXR, linear BT.709, {timer.ElapsedMilliseconds}ms, downsampling {downsampling}x]; {info.TransferSummary}; {info.ColorSummary}"
+            };
+        }
+        finally
+        {
+            TryDeleteFile(exrPath);
             TryDeleteDirectory(tempDir);
         }
     }
@@ -829,7 +910,9 @@ public static class BitmapDecodeService
             ? DecodedBitmapTransfer.Pq
             : info.TransferFunction.Contains("HLG", StringComparison.OrdinalIgnoreCase)
                 ? DecodedBitmapTransfer.Hlg
-                : DecodedBitmapTransfer.Sdr;
+                : info.TransferFunction.Contains("linear", StringComparison.OrdinalIgnoreCase)
+                    ? DecodedBitmapTransfer.LinearSceneScRgb
+                    : DecodedBitmapTransfer.Sdr;
     }
 
     private static int CalculateJxlDownsampling(JxlProbeResult info, int? maxPixelSize)
@@ -855,58 +938,21 @@ public static class BitmapDecodeService
         return ratio >= 1.75 ? 2 : 1;
     }
 
-    private static DecodedBitmap DownscalePreviewBitmapIfNeeded(
-        DecodedBitmap bitmap,
-        int? maxPixelSize,
-        CancellationToken cancellationToken)
-    {
-        if (!TryCalculateScaledSize(bitmap.PixelWidth, bitmap.PixelHeight, maxPixelSize, out var scaledWidth, out var scaledHeight))
-        {
-            return bitmap;
-        }
-
-        var timer = Stopwatch.StartNew();
-        var destinationWidth = checked((int)scaledWidth);
-        var destinationHeight = checked((int)scaledHeight);
-        var bytesPerPixel = bitmap.BytesPerPixel;
-        var destination = new byte[checked(destinationWidth * destinationHeight * bytesPerPixel)];
-        System.Threading.Tasks.Parallel.For(0, destinationHeight, y =>
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            var sourceY = Math.Min(bitmap.PixelHeight - 1, (int)((long)y * bitmap.PixelHeight / destinationHeight));
-            var sourceRow = checked(sourceY * bitmap.PixelWidth * bytesPerPixel);
-            var destinationRow = checked(y * destinationWidth * bytesPerPixel);
-            for (var x = 0; x < destinationWidth; x++)
-            {
-                var sourceX = Math.Min(bitmap.PixelWidth - 1, (int)((long)x * bitmap.PixelWidth / destinationWidth));
-                System.Buffer.BlockCopy(
-                    bitmap.RgbaPixels,
-                    checked(sourceRow + (sourceX * bytesPerPixel)),
-                    destination,
-                    checked(destinationRow + (x * bytesPerPixel)),
-                    bytesPerPixel);
-            }
-        });
-        var scaleMs = timer.ElapsedMilliseconds;
-
-        return bitmap with
-        {
-            PixelWidth = destinationWidth,
-            PixelHeight = destinationHeight,
-            RgbaPixels = destination,
-            DecoderName = $"{bitmap.DecoderName} [preview downscale {bitmap.PixelWidth}x{bitmap.PixelHeight}->{destinationWidth}x{destinationHeight} {scaleMs}ms]",
-        };
-    }
+    internal static DecodedBitmap DownscalePreviewBitmapIfNeeded(
+        DecodedBitmap bitmap, int? maxPixelSize, CancellationToken cancellationToken) =>
+        BitmapPreviewResampler.Downscale(bitmap, maxPixelSize, cancellationToken);
 
     private static async Task<DecodedBitmap> DecodeExrWithNativeToolAsync(
         string path,
         int? maxPixelSize,
+        bool preserveAlpha,
         CancellationToken cancellationToken)
     {
         string? nativeFallbackReason = null;
         try
         {
             var bitmap = await Task.Run(() => NativeExrDecoder.Decode(path, maxPixelSize), cancellationToken);
+            if (preserveAlpha) UnpremultiplyExrThumbnailPixels(bitmap, cancellationToken);
             return DownscalePreviewBitmapIfNeeded(bitmap, maxPixelSize, cancellationToken);
         }
         catch (OperationCanceledException)
@@ -946,6 +992,28 @@ public static class BitmapDecodeService
         }
     }
 
+    private static void UnpremultiplyExrThumbnailPixels(DecodedBitmap bitmap, CancellationToken cancellationToken)
+    {
+        // OpenEXR RGB is associated with alpha. Thumbnail color conversion
+        // operates on straight light values and premultiplies only after the
+        // sRGB curve; undo EXR association without changing full-size decode.
+        var pixels = MemoryMarshal.Cast<byte, Half>(bitmap.RgbaPixels.AsSpan());
+        for (var y = 0; y < bitmap.PixelHeight; y++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            for (var x = 0; x < bitmap.PixelWidth; x++)
+            {
+                var offset = (y * bitmap.PixelWidth + x) * 4;
+                var alpha = (float)pixels[offset + 3];
+                if (alpha >= 1f) continue;
+                for (var channel = 0; channel < 3; channel++)
+                    pixels[offset + channel] = alpha > 0 && float.IsFinite(alpha)
+                        ? (Half)Math.Clamp((float)pixels[offset + channel] / alpha, -65504f, 65504f)
+                        : (Half)0;
+            }
+        }
+    }
+
     private static async Task<string> ConvertExrToPfmAsync(
         string inputPath,
         string outputPath,
@@ -953,26 +1021,28 @@ public static class BitmapDecodeService
     {
         if (NativeToolLocator.FindTool("oiiotool.exe") is { } oiiotool)
         {
-            using var process = CreateNativeProcess(oiiotool);
+            using var process = NativeProcessRunner.Create(oiiotool);
             process.StartInfo.ArgumentList.Add(inputPath);
             process.StartInfo.ArgumentList.Add("-o");
             process.StartInfo.ArgumentList.Add(outputPath);
-            await RunProcessAsync(process, "OpenImageIO oiiotool EXR->PFM", cancellationToken);
+            await NativeProcessRunner.RunAsync(process, "OpenImageIO oiiotool EXR->PFM", cancellationToken);
             return "OpenImageIO oiiotool -> PFM float";
         }
 
         if (NativeToolLocator.FindTool("magick.exe") is { } magick)
         {
-            using var process = CreateNativeProcess(magick);
+            using var process = NativeProcessRunner.Create(magick);
             process.StartInfo.ArgumentList.Add(inputPath);
-            process.StartInfo.ArgumentList.Add("-colorspace");
+            // EXR samples are already scene-linear; tag them without applying gamma.
+            process.StartInfo.ArgumentList.Add("-set");
+            process.StartInfo.ArgumentList.Add("colorspace");
             process.StartInfo.ArgumentList.Add("RGB");
             process.StartInfo.ArgumentList.Add("-define");
             process.StartInfo.ArgumentList.Add("quantum:format=floating-point");
             process.StartInfo.ArgumentList.Add("-depth");
             process.StartInfo.ArgumentList.Add("32");
             process.StartInfo.ArgumentList.Add(outputPath);
-            await RunProcessAsync(process, "ImageMagick EXR->PFM", cancellationToken);
+            await NativeProcessRunner.RunAsync(process, "ImageMagick EXR->PFM", cancellationToken);
             return "ImageMagick -> PFM float";
         }
 
@@ -1012,7 +1082,7 @@ public static class BitmapDecodeService
         IWICBitmapSource source = converter;
         IWICBitmapScaler? scaler = null;
         var scaleMs = 0L;
-        if (TryCalculateScaledSize((int)converter.Size.Width, (int)converter.Size.Height, maxPixelSize, out var scaledWidth, out var scaledHeight))
+        if (BitmapPreviewResampler.TryCalculateScaledSize((int)converter.Size.Width, (int)converter.Size.Height, maxPixelSize, out var scaledWidth, out var scaledHeight))
         {
             var scaleTimer = Stopwatch.StartNew();
             scaler = factory.CreateBitmapScaler();
@@ -1043,6 +1113,7 @@ public static class BitmapDecodeService
                 handle.Free();
             }
             var copyMs = copyTimer.ElapsedMilliseconds;
+            cancellationToken.ThrowIfCancellationRequested();
 
             return new DecodedBitmap(
                 width,
@@ -1161,8 +1232,9 @@ public static class BitmapDecodeService
             : "HEIF/HEIC";
     }
 
-    private static DecodedBitmap ConvertHdrEncodedToLinearScRgb(DecodedBitmap bitmap, double? hlgTargetNits)
+    private static DecodedBitmap ConvertHdrEncodedToLinearScRgb(DecodedBitmap bitmap, double? hlgTargetNits, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         if (bitmap.Transfer is not (DecodedBitmapTransfer.Pq or DecodedBitmapTransfer.Hlg)
             || bitmap.PixelFormat != DecodedBitmapPixelFormat.Rgba16Unorm)
         {
@@ -1176,8 +1248,7 @@ public static class BitmapDecodeService
         var bytesPerInputPixel = bitmap.BytesPerPixel;
         var inputPixels = bitmap.RgbaPixels;
         var transfer = bitmap.Transfer;
-        var usesBt2020 = bitmap.UsesBt2020Primaries;
-        System.Threading.Tasks.Parallel.For(0, height, y =>
+        System.Threading.Tasks.Parallel.For(0, height, new ParallelOptions { CancellationToken = cancellationToken }, y =>
         {
             var rowInputStart = checked(y * width * bytesPerInputPixel);
             var rowOutputStart = checked(y * width * 8);
@@ -1192,10 +1263,7 @@ public static class BitmapDecodeService
                 var linear = transfer == DecodedBitmapTransfer.Pq
                     ? HdrColorMath.PqToSceneLinear(encoded)
                     : HdrColorMath.HlgToSceneLinear(encoded, hlgTargetScenePeak);
-                if (usesBt2020)
-                {
-                    linear = HdrColorMath.Bt2020ToBt709(linear);
-                }
+                linear = ThumbnailPixelConverter.ConvertLinearToBt709(linear, bitmap.EffectiveColorGamut);
 
                 WriteHalfLittleEndian(output, outputIndex, linear.X);
                 WriteHalfLittleEndian(output, outputIndex + 2, linear.Y);
@@ -1225,6 +1293,10 @@ public static class BitmapDecodeService
             _ => "BT.709",
         };
     }
+
+    private static GainMapColorGamut GetHeifColorGamut(HeifAvifProbeResult probe) =>
+        probe.ColorPrimaries == 12 ? GainMapColorGamut.DisplayP3
+        : probe.HasBt2020 ? GainMapColorGamut.Bt2100 : GainMapColorGamut.Bt709;
 
     private static string DescribeColorGamutSuffix(GainMapColorGamut gamut)
     {
@@ -1306,7 +1378,8 @@ public static class BitmapDecodeService
             decoderName,
             maxPixelSize,
             colorGamut,
-            createMs);
+            createMs,
+            cancellationToken: cancellationToken);
     }
 
     private static async Task<DecodedBitmap> DecodeFileWithWinRTAsync(
@@ -1319,7 +1392,8 @@ public static class BitmapDecodeService
         string decoderName,
         int? maxPixelSize,
         CancellationToken cancellationToken,
-        GainMapColorGamut colorGamut = GainMapColorGamut.Unknown)
+        GainMapColorGamut colorGamut = GainMapColorGamut.Unknown,
+        bool preserveAlpha = false)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -1344,7 +1418,9 @@ public static class BitmapDecodeService
             decoderName,
             maxPixelSize,
             colorGamut,
-            createMs);
+            createMs,
+            preserveAlpha,
+            cancellationToken);
     }
 
     private static async Task<DecodedBitmap> DecodeFromBitmapDecoderAsync(
@@ -1357,8 +1433,11 @@ public static class BitmapDecodeService
         string decoderName,
         int? maxPixelSize,
         GainMapColorGamut colorGamut = GainMapColorGamut.Unknown,
-        long createDecoderMs = 0)
+        long createDecoderMs = 0,
+        bool preserveAlpha = false,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var orientationMode = respectExifOrientation
             ? ExifOrientationMode.RespectExifOrientation
             : ExifOrientationMode.IgnoreExifOrientation;
@@ -1371,11 +1450,12 @@ public static class BitmapDecodeService
         var pixelTimer = Stopwatch.StartNew();
         var pixelData = await decoder.GetPixelDataAsync(
             pixelFormat,
-            BitmapAlphaMode.Ignore,
+            preserveAlpha ? BitmapAlphaMode.Straight : BitmapAlphaMode.Ignore,
             transform,
             orientationMode,
             colorManageToSrgb ? ColorManagementMode.ColorManageToSRgb : ColorManagementMode.DoNotColorManage);
         var pixelMs = pixelTimer.ElapsedMilliseconds;
+        cancellationToken.ThrowIfCancellationRequested();
 
         var detachTimer = Stopwatch.StartNew();
         var pixels = pixelData.DetachPixelData();
@@ -1398,7 +1478,7 @@ public static class BitmapDecodeService
 
     private static BitmapTransform CreateDecodeTransform(uint width, uint height, int? maxPixelSize)
     {
-        if (!TryCalculateScaledSize((int)width, (int)height, maxPixelSize, out var scaledWidth, out var scaledHeight))
+        if (!BitmapPreviewResampler.TryCalculateScaledSize((int)width, (int)height, maxPixelSize, out var scaledWidth, out var scaledHeight))
         {
             return new BitmapTransform();
         }
@@ -1409,88 +1489,6 @@ public static class BitmapDecodeService
             ScaledHeight = scaledHeight,
             InterpolationMode = Windows.Graphics.Imaging.BitmapInterpolationMode.Fant,
         };
-    }
-
-    private static bool TryCalculateScaledSize(
-        int width,
-        int height,
-        int? maxPixelSize,
-        out uint scaledWidth,
-        out uint scaledHeight)
-    {
-        scaledWidth = 0;
-        scaledHeight = 0;
-        if (maxPixelSize is null || maxPixelSize <= 0 || width <= 0 || height <= 0)
-        {
-            return false;
-        }
-
-        var largerSide = Math.Max(width, height);
-        if (largerSide <= maxPixelSize.Value)
-        {
-            return false;
-        }
-
-        var scale = maxPixelSize.Value / (double)largerSide;
-        scaledWidth = Math.Max(1u, (uint)Math.Round(width * scale));
-        scaledHeight = Math.Max(1u, (uint)Math.Round(height * scale));
-        return true;
-    }
-
-    private static Process CreateNativeProcess(string executablePath)
-    {
-        var process = new Process();
-        process.StartInfo.FileName = executablePath;
-        process.StartInfo.UseShellExecute = false;
-        process.StartInfo.RedirectStandardOutput = true;
-        process.StartInfo.RedirectStandardError = true;
-        process.StartInfo.CreateNoWindow = true;
-        return process;
-    }
-
-    private static async Task<string> RunProcessAsync(Process process, string backendName, CancellationToken cancellationToken)
-    {
-        if (!process.Start())
-        {
-            throw new InvalidOperationException($"启动 {backendName} 失败。");
-        }
-
-        var outputTask = process.StandardOutput.ReadToEndAsync(CancellationToken.None);
-        var errorTask = process.StandardError.ReadToEndAsync(CancellationToken.None);
-        try
-        {
-            await process.WaitForExitAsync(cancellationToken);
-        }
-        catch (OperationCanceledException)
-        {
-            TryKillProcessTree(process);
-            throw;
-        }
-
-        var output = await outputTask;
-        var error = await errorTask;
-        if (process.ExitCode != 0)
-        {
-            var message = string.Join("\n", new[] { output.Trim(), error.Trim() }.Where(part => !string.IsNullOrWhiteSpace(part)));
-            throw new InvalidOperationException($"{backendName} 失败，exit {process.ExitCode}: {message}");
-        }
-
-        return string.Join("\n", new[] { output.Trim(), error.Trim() }.Where(part => !string.IsNullOrWhiteSpace(part)));
-    }
-
-    private static void TryKillProcessTree(Process process)
-    {
-        try
-        {
-            if (!process.HasExited)
-            {
-                process.Kill(entireProcessTree: true);
-            }
-        }
-        catch
-        {
-            // Best-effort: the process may have already exited or be inaccessible.
-        }
     }
 
     private static void TryDeleteFile(string path)

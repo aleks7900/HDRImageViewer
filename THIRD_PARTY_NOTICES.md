@@ -21,7 +21,7 @@
 
 | 组件 | 用途 | 备注 |
 | --- | --- | --- |
-| OpenEXR | `HdrImageViewer.Native` 的 EXR 解码 backend | GitHub workflow 通过 vcpkg 构建 OpenEXR，并把运行时 DLL 打进 portable zip。 |
+| OpenEXR | `HdrImageViewer.Native` 的 EXR 解码 backend | GitHub workflow 通过锁定源码和 MSYS2 UCRT64 依赖构建 OpenEXR，并把运行时 DLL 打进 portable zip。 |
 | Imath / Iex / IlmThread / libdeflate / openjph 等 OpenEXR 运行时依赖 | OpenEXR transitive runtime DLL | 随 OpenEXR 构建/运行时一起进入 portable zip；请遵守各自许可证。 |
 | vcpkg | CI / 本地 native 依赖安装 | 用于获取和构建 OpenEXR 等 native 依赖。 |
 
@@ -36,10 +36,10 @@
 | `jxlinfo.exe` / `djxl.exe` | JPEG XL 探测和预览 | MSYS2 `mingw-w64-ucrt-x86_64-libjxl` | 按 libjxl 及其依赖许可证使用。 |
 | `cjxl.exe` | JPEG XL HDR 导出 | MSYS2 `mingw-w64-ucrt-x86_64-libjxl` | 按 libjxl 及其依赖许可证使用。 |
 | `avifenc.exe` | AVIF HDR 导出 | MSYS2 `mingw-w64-ucrt-x86_64-libavif` | 按 libavif、AOM/dav1d/rav1e 等实际 backend 许可证使用。 |
-| `avifgainmaputil.exe` | AVIF ISO gain-map 提取和元数据读取 | MSYS2 `mingw-w64-ucrt-x86_64-libavif` | 当前放在独立 `avifgainmaputil` 子目录并随其 MSYS2 运行时 DLL 一起使用；按 libavif、AOM/dav1d/rav1e/SVT-AV1、libjpeg、libpng、libxml2 等实际依赖许可证处理。 |
+| `avifgainmaputil.exe` | AVIF ISO gain-map 提取和元数据读取 | MSYS2 `mingw-w64-ucrt-x86_64-libavif` | 当前与其他 CLI 共用根目录中的同一套 MSYS2 UCRT64 运行时 DLL；按 libavif、AOM/dav1d/rav1e/SVT-AV1、libjpeg、libpng、libxml2 等实际依赖许可证处理。 |
 | `heif-enc.exe` | HEIF / HEIC HDR 导出 | MSYS2 `mingw-w64-ucrt-x86_64-libheif` | 用户自行安装并由本应用子进程调用时，本项目不重新分发该工具；若随包携带，需按 libheif、实际 HEVC backend 等组件许可证处理。 |
 | `heif-dec.exe` / `avifdec.exe` | HEIF / AVIF 解码 fallback | MSYS2 libheif / libavif 工具包 | 当前主要用于 fallback；请遵守对应项目许可证。 |
-| `ultrahdr_app.exe` | JPEG Ultra HDR / gain-map 导出 | Google libultrahdr 本地构建 | 需要遵守 libultrahdr 及其依赖许可证。 |
+| `ultrahdr_app.exe` | JPEG / HEIC / AVIF Gain Map 导出 | Google libultrahdr 本地构建 | 需要遵守 libultrahdr 及其依赖许可证。 |
 | `oiiotool.exe` / `magick.exe` | EXR fallback 转换路径 | OpenImageIO / ImageMagick | 仅作为 fallback 探测/转换工具；按各自许可证使用。 |
 
 ## HEIC / x265 特别说明
@@ -55,3 +55,12 @@ HEIC HDR 导出通常需要 HEVC 编码器。常见的 `heif-enc.exe` 组合会�
 - 源码仓库：只提交项目源码、文档、测试和构建脚本。
 - GitHub portable zip：包含应用、README、LICENSE、THIRD_PARTY_NOTICES，以及构建输出中存在且允许分发的 runtime 文件；不随包携带的用户自装 CLI 不需要在这里按二进制再分发处理。如果纳入 `external/encoders/<arch>` 中的可选 HDR 编码器，发布前必须重新检查被纳入文件的许可证义务。
 - Microsoft Store / MSIX 包：当前本地 x64 测试包可以从 `external/encoders/x64` 携带工具；对外发布前应区分“用户自装外部工具”和“包内携带第三方二进制”，只对实际随包分发的文件处理对应许可证义务，并单独评估专利/商用和 Store 政策。
+
+### libultrahdr 私有 HEIF 后端
+
+`libheif-uhdr.dll` 使用 libultrahdr 2.0.2 指定的 libheif 提交
+`4a3f74bc593ebfc29becc1ed5dd0a61cc66d40e1`（1.19.7 基础）及其自带的
+`cmake/patches/libheif_pr1503.patch`，许可证为 LGPL-3.0-or-later。
+该 DLL 独立命名，普通 HEIF/AVIF 解码继续使用 libheif 1.23.5。
+源归档 URL 和 SHA256 在 `eng/codecs.lock.json`，补丁应用与构建步骤在
+`eng/build-codecs.py`，许可证随 bundle 保存在 `licenses` 中。

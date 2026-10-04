@@ -11,7 +11,8 @@ namespace HdrImageViewer.Services;
 public sealed record GainMapHdrExportCapability(
     bool CanWriteJpegUltraHdr,
     string Backend,
-    string Details);
+    string Details,
+    bool CanWriteHeifGainMap = false);
 
 public enum UltraHdrGainMapChannelMode
 {
@@ -53,13 +54,14 @@ public static class GainMapHdrExportService
             return new GainMapHdrExportCapability(
                 true,
                 "libultrahdr CLI",
-                $"found {cli}");
+                $"found {cli}",
+                File.Exists(Path.Combine(Path.GetDirectoryName(cli)!, "libheif-uhdr.dll")));
         }
 
         return new GainMapHdrExportCapability(
             false,
             "libultrahdr planned",
-            "未找到 libultrahdr CLI。请运行 eng\\verify-codecs.ps1 -RepairUltraHdr，或把 ultrahdr_app.exe 放到 external\\encoders\\x64。");
+            "未找到 libultrahdr CLI。请运行 eng\\build-native.ps1，或把 ultrahdr_app.exe 放到 external\\encoders\\x64。");
     }
 
     public static async Task<string> ExportJpegUltraHdrAsync(
@@ -68,7 +70,7 @@ public static class GainMapHdrExportService
         string outputPath,
         CancellationToken cancellationToken = default)
     {
-        return await ExportJpegUltraHdrCoreAsync(document, bounds, outputPath, UltraHdrExportOptions.Default, cancellationToken);
+        return await ExportCoreAsync(document, bounds, outputPath, UltraHdrExportOptions.Default, cancellationToken);
     }
 
     public static async Task<string> ExportJpegUltraHdrAsync(
@@ -78,7 +80,7 @@ public static class GainMapHdrExportService
         UltraHdrExportOptions options,
         CancellationToken cancellationToken = default)
     {
-        return await ExportJpegUltraHdrCoreAsync(document, bounds, outputPath, options, cancellationToken);
+        return await ExportCoreAsync(document, bounds, outputPath, options, cancellationToken);
     }
 
     public static async Task<string> ExportJpegUltraHdrAsync(
@@ -86,7 +88,7 @@ public static class GainMapHdrExportService
         string outputPath,
         CancellationToken cancellationToken = default)
     {
-        return await ExportJpegUltraHdrCoreAsync(document, bounds: null, outputPath, UltraHdrExportOptions.Default, cancellationToken);
+        return await ExportCoreAsync(document, bounds: null, outputPath, UltraHdrExportOptions.Default, cancellationToken);
     }
 
     public static async Task<string> ExportJpegUltraHdrAsync(
@@ -95,10 +97,25 @@ public static class GainMapHdrExportService
         UltraHdrExportOptions options,
         CancellationToken cancellationToken = default)
     {
-        return await ExportJpegUltraHdrCoreAsync(document, bounds: null, outputPath, options, cancellationToken);
+        return await ExportCoreAsync(document, bounds: null, outputPath, options, cancellationToken);
     }
 
-    private static async Task<string> ExportJpegUltraHdrCoreAsync(
+    public static Task<string> ExportAsync(
+        HdrImageDocument document,
+        string outputPath,
+        UltraHdrExportOptions? options = null,
+        CancellationToken cancellationToken = default)
+        => ExportCoreAsync(document, null, outputPath, options ?? UltraHdrExportOptions.Default, cancellationToken);
+
+    public static Task<string> ExportAsync(
+        HdrImageDocument document,
+        BitmapBounds bounds,
+        string outputPath,
+        UltraHdrExportOptions? options = null,
+        CancellationToken cancellationToken = default)
+        => ExportCoreAsync(document, bounds, outputPath, options ?? UltraHdrExportOptions.Default, cancellationToken);
+
+    private static async Task<string> ExportCoreAsync(
         HdrImageDocument document,
         BitmapBounds? bounds,
         string outputPath,
@@ -107,6 +124,13 @@ public static class GainMapHdrExportService
     {
         var cli = FindUltraHdrAppExecutable()
             ?? throw new NotSupportedException(GetCapability().Details);
+
+        var extension = Path.GetExtension(outputPath).ToLowerInvariant();
+        var isJpeg = extension is ".jpg" or ".jpeg";
+        if (!isJpeg && extension is not (".heic" or ".avif"))
+            throw new NotSupportedException("Gain Map 导出支持 JPEG、HEIC 和 AVIF。");
+        if (!isJpeg && !GetCapability().CanWriteHeifGainMap)
+            throw new NotSupportedException("未找到支持 HEIC / AVIF Gain Map 的 libultrahdr 后端，请重新构建编解码库。");
 
         var resolvedOptions = options with
         {
@@ -121,7 +145,9 @@ public static class GainMapHdrExportService
             Width = checked((uint)source.Width),
             Height = checked((uint)source.Height),
         };
-        if (exportBounds.X + exportBounds.Width > source.Width || exportBounds.Y + exportBounds.Height > source.Height)
+        if (exportBounds.Width == 0 || exportBounds.Height == 0
+            || (ulong)exportBounds.X + exportBounds.Width > (ulong)source.Width
+            || (ulong)exportBounds.Y + exportBounds.Height > (ulong)source.Height)
         {
             throw new InvalidOperationException($"裁切区域超出 HDR 源尺寸: {exportBounds.X},{exportBounds.Y} {exportBounds.Width}x{exportBounds.Height}, source {source.Width}x{source.Height}。");
         }
@@ -130,25 +156,35 @@ public static class GainMapHdrExportService
         var tempDir = Path.Combine(Path.GetTempPath(), "HdrImageViewer", "ultrahdr-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(tempDir);
         var rawPath = Path.Combine(tempDir, "hdr-rgba-f16.raw");
-        var candidateOutput = Path.Combine(tempDir, "crop-ultrahdr.jpg");
+        var candidateOutput = Path.Combine(tempDir, "gainmap" + extension);
         var metadataPath = Path.Combine(tempDir, "metadata.cfg");
 
         try
         {
             await WriteRgbaHalfFloatRawAsync(rawPath, source, exportBounds, cancellationToken);
             await RunUltraHdrEncodeAsync(cli, rawPath, candidateOutput, exportBounds, resolvedOptions, cancellationToken);
-            await VerifyUltraHdrAsync(cli, candidateOutput, metadataPath, cancellationToken);
-            var probe = await GainMapJpegProbe.ProbeAsync(candidateOutput, cancellationToken);
-            if (!probe.IsRenderableUltraHdr)
+            await VerifyUltraHdrAsync(cli, candidateOutput, metadataPath, cancellationToken, exportBounds);
+            string metadataSummary;
+            if (isJpeg)
             {
-                throw new InvalidOperationException($"libultrahdr 已生成 JPEG，但反查未检测到可渲染 gain-map: {probe.DisplayStatus}");
+                var probe = await GainMapJpegProbe.ProbeAsync(candidateOutput, cancellationToken);
+                if (!probe.IsRenderableUltraHdr)
+                    throw new InvalidOperationException($"导出结果未检测到可渲染 gain map: {probe.DisplayStatus}");
+                metadataSummary = $"gain max {probe.Metadata?.GainMapMax}, capacity {probe.Metadata?.HdrCapacityMax}";
             }
-
+            else
+            {
+                var reopened = await ImageDocumentLoader.LoadAsync(candidateOutput, cancellationToken);
+                if (reopened.Document.HeifAvifProbe?.HasIsoGainMapSignal != true)
+                    throw new InvalidOperationException("导出结果缺少 ISO Gain Map 元数据。");
+                var inputs = await GainMapRenderInputDecoder.DecodeRenderInputsAsync(reopened.Document, cancellationToken);
+                if (inputs.Primary.PixelWidth != exportBounds.Width || inputs.Primary.PixelHeight != exportBounds.Height
+                    || inputs.GainMap.RgbaPixels.Length == 0)
+                    throw new InvalidOperationException("导出结果的底图或增益图回读验证失败。");
+                metadataSummary = "ISO 21496-1; base + gain map verified";
+            }
             await ExportFileTransaction.CopyAsync(candidateOutput, outputPath, cancellationToken);
-            var metadataSummary = probe.Metadata is null
-                ? "metadata unread"
-                : $"gain max {probe.Metadata.GainMapMax ?? "?"}, capacity {probe.Metadata.HdrCapacityMin ?? "?"}-{probe.Metadata.HdrCapacityMax ?? "?"}";
-            return $"libultrahdr v1.4 CLI; {source.Description}; {DescribeGainMapChannelMode(resolvedOptions.GainMapChannelMode)} gain map; SDR base {DescribeSdrBaseGamut(resolvedOptions.SdrBaseColorGamut)}; {exportBounds.Width}x{exportBounds.Height}; {metadataSummary}";
+            return $"libultrahdr CLI; {extension}; {source.Description}; {DescribeGainMapChannelMode(resolvedOptions.GainMapChannelMode)} gain map; SDR base {DescribeSdrBaseGamut(resolvedOptions.SdrBaseColorGamut)}; {exportBounds.Width}x{exportBounds.Height}; {metadataSummary}";
         }
         finally
         {
@@ -181,9 +217,14 @@ public static class GainMapHdrExportService
         var gainMapBytes = await UltraHdrGainMapDecoder.ReadSegmentAsync(document.Path, probe.GainMapOffset!.Value, probe.GainMapLength!.Value, cancellationToken);
         var primary = await BitmapDecodeService.DecodeBytesAsync(primaryBytes, colorManageToSrgb: true, respectExifOrientation: false, cancellationToken);
         var gainMap = await BitmapDecodeService.DecodeBytesAsync(gainMapBytes, colorManageToSrgb: false, respectExifOrientation: false, cancellationToken);
-        if (bounds.X + bounds.Width > primary.PixelWidth || bounds.Y + bounds.Height > primary.PixelHeight)
+        var orientation = probe.ExifOrientation ?? 1;
+        var primaryTransform = new ExifOrientationTransform(primary.PixelWidth, primary.PixelHeight, orientation);
+        var gainMapTransform = new ExifOrientationTransform(gainMap.PixelWidth, gainMap.PixelHeight, orientation);
+        if (bounds.Width == 0 || bounds.Height == 0
+            || (ulong)bounds.X + bounds.Width > (ulong)primaryTransform.Width
+            || (ulong)bounds.Y + bounds.Height > (ulong)primaryTransform.Height)
         {
-            throw new InvalidOperationException($"裁切区域超出 base 尺寸: {bounds.X},{bounds.Y} {bounds.Width}x{bounds.Height}, source {primary.PixelWidth}x{primary.PixelHeight}。");
+            throw new InvalidOperationException($"裁切区域超出 base 尺寸: {bounds.X},{bounds.Y} {bounds.Width}x{bounds.Height}, source {primaryTransform.Width}x{primaryTransform.Height}。");
         }
 
         Directory.CreateDirectory(Path.GetDirectoryName(outputPath) ?? Environment.CurrentDirectory);
@@ -196,9 +237,9 @@ public static class GainMapHdrExportService
 
         try
         {
-            var gainBounds = MapBounds(bounds, primary.PixelWidth, primary.PixelHeight, gainMap.PixelWidth, gainMap.PixelHeight);
-            await EncodeDecodedBitmapJpegCropAsync(primary, bounds, basePath, BitmapPixelFormat.Bgra8, cancellationToken);
-            await EncodeDecodedBitmapJpegCropAsync(gainMap, gainBounds, gainPath, BitmapPixelFormat.Bgra8, cancellationToken);
+            var gainBounds = MapBounds(bounds, primaryTransform.Width, primaryTransform.Height, gainMapTransform.Width, gainMapTransform.Height);
+            await EncodeDecodedBitmapJpegCropAsync(primary, bounds, primaryTransform, basePath, BitmapPixelFormat.Bgra8, cancellationToken);
+            await EncodeDecodedBitmapJpegCropAsync(gainMap, gainBounds, gainMapTransform, gainPath, BitmapPixelFormat.Bgra8, cancellationToken);
             await WriteMetadataConfigAsync(probe.Metadata, metadataPath, cancellationToken);
             await RunUltraHdrScenario4Async(cli, basePath, gainPath, metadataPath, candidateOutput, cancellationToken);
             await VerifyUltraHdrAsync(cli, candidateOutput, Path.Combine(tempDir, "verify-metadata.cfg"), cancellationToken);
@@ -315,7 +356,7 @@ public static class GainMapHdrExportService
         await RunProcessAsync(process, cancellationToken);
         if (!File.Exists(outputPath) || new FileInfo(outputPath).Length == 0)
         {
-            throw new InvalidOperationException("libultrahdr 编码结束但没有生成有效 JPEG 文件。");
+            throw new InvalidOperationException("libultrahdr 编码结束但没有生成有效图像文件。");
         }
     }
 
@@ -328,16 +369,9 @@ public static class GainMapHdrExportService
         UltraHdrSdrBaseColorGamut requested,
         HdrImageDocument document)
     {
-        if (requested != UltraHdrSdrBaseColorGamut.Auto)
-        {
-            return requested;
-        }
-
-        return document.Format.Kind == HdrImageKind.SingleLayerHdr
-            || document.HeifAvifProbe?.HasHdrTransfer == true
-            || document.JxlProbe?.IsHdrTransfer == true
-                ? UltraHdrSdrBaseColorGamut.Bt2100
-                : UltraHdrSdrBaseColorGamut.Bt709;
+        // HDR-only API-0 internally tone-maps to Display P3. The CLI -c flag
+        // describes an optional SDR input; it cannot select the output gamut.
+        return UltraHdrSdrBaseColorGamut.DisplayP3;
     }
 
     public static string DescribeSdrBaseGamut(UltraHdrSdrBaseColorGamut gamut)
@@ -384,7 +418,7 @@ public static class GainMapHdrExportService
         await RunProcessAsync(process, cancellationToken);
         if (!File.Exists(outputPath) || new FileInfo(outputPath).Length == 0)
         {
-            throw new InvalidOperationException("libultrahdr scenario 4 结束但没有生成有效 JPEG 文件。");
+            throw new InvalidOperationException("libultrahdr scenario 4 结束但没有生成有效图像文件。");
         }
     }
 
@@ -404,11 +438,12 @@ public static class GainMapHdrExportService
     private static async Task EncodeDecodedBitmapJpegCropAsync(
         DecodedBitmap bitmap,
         BitmapBounds bounds,
+        ExifOrientationTransform orientation,
         string outputPath,
         BitmapPixelFormat outputFormat,
         CancellationToken cancellationToken)
     {
-        var pixels = ConvertCropToBgra8(bitmap, bounds);
+        var pixels = await Task.Run(() => ConvertCropToBgra8(bitmap, bounds, orientation, cancellationToken), cancellationToken);
         await using var output = new FileStream(outputPath, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, 1024 * 1024, useAsync: true);
         using var randomAccess = output.AsRandomAccessStream();
         var encoder = await BitmapEncoder.CreateAsync(BitmapEncoder.JpegEncoderId, randomAccess);
@@ -424,16 +459,17 @@ public static class GainMapHdrExportService
         cancellationToken.ThrowIfCancellationRequested();
     }
 
-    private static byte[] ConvertCropToBgra8(DecodedBitmap bitmap, BitmapBounds bounds)
+    private static byte[] ConvertCropToBgra8(DecodedBitmap bitmap, BitmapBounds bounds, ExifOrientationTransform orientation, CancellationToken cancellationToken)
     {
         var result = new byte[checked((int)bounds.Width * (int)bounds.Height * 4)];
         var destination = 0;
         for (var y = 0; y < bounds.Height; y++)
         {
-            var sourceY = checked((int)bounds.Y + y);
+            cancellationToken.ThrowIfCancellationRequested();
+            var orientedY = checked((int)bounds.Y + y);
             for (var x = 0; x < bounds.Width; x++)
             {
-                var sourceX = checked((int)bounds.X + x);
+                var (sourceX, sourceY) = orientation.MapToSource(checked((int)bounds.X + x), orientedY);
                 var rgb = ReadEncodedRgb(bitmap, sourceX, sourceY);
                 result[destination++] = ToByte(rgb.Z);
                 result[destination++] = ToByte(rgb.Y);
@@ -517,7 +553,8 @@ public static class GainMapHdrExportService
         string cli,
         string outputPath,
         string metadataPath,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        BitmapBounds? expectedBounds = null)
     {
         using var process = CreateUltraHdrProcess(cli);
         process.StartInfo.ArgumentList.Add("-m");
@@ -534,6 +571,10 @@ public static class GainMapHdrExportService
         process.StartInfo.ArgumentList.Add(Path.Combine(Path.GetDirectoryName(metadataPath)!, "verify-rgba-f16.raw"));
 
         await RunProcessAsync(process, cancellationToken);
+        var decodedPath = Path.Combine(Path.GetDirectoryName(metadataPath)!, "verify-rgba-f16.raw");
+        if (expectedBounds is { } expected
+            && (!File.Exists(decodedPath) || new FileInfo(decodedPath).Length != checked((long)expected.Width * expected.Height * 8)))
+            throw new InvalidOperationException("libultrahdr HDR 回读像素尺寸不匹配。");
         if (!File.Exists(metadataPath) || new FileInfo(metadataPath).Length == 0)
         {
             throw new InvalidOperationException("libultrahdr 反查成功但未写出 gain-map metadata，导出结果不可信。");
@@ -632,14 +673,18 @@ public static class GainMapHdrExportService
 
     private sealed class GainMapSceneSource(GainMapRenderInputs inputs) : IHdrSceneSource
     {
-        public int Width => inputs.Primary.PixelWidth;
+        private readonly ExifOrientationTransform _orientation = new(
+            inputs.Primary.PixelWidth, inputs.Primary.PixelHeight, (int)inputs.Constants.Orientation.X);
 
-        public int Height => inputs.Primary.PixelHeight;
+        public int Width => _orientation.Width;
+
+        public int Height => _orientation.Height;
 
         public string Description => $"gain-map source base {inputs.Primary.PixelWidth}x{inputs.Primary.PixelHeight}, gain {inputs.GainMap.PixelWidth}x{inputs.GainMap.PixelHeight}";
 
         public Vector3 ReadSceneLinearBt2020(int x, int y)
         {
+            (x, y) = _orientation.MapToSource(x, y);
             var sdr = HdrColorMath.DecodeGainMapBaseToLinear(ReadEncodedRgb(inputs.Primary, x, y), inputs.Constants);
             var gain = ReadGainMapSample(inputs.GainMap, x, y, inputs.Primary.PixelWidth, inputs.Primary.PixelHeight);
             var scene = inputs.Constants.GainMapControl.Y > 0.5f

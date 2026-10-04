@@ -155,7 +155,7 @@
     <value>Lingua</value>
   </data>
   <data name="SettingsLanguageRestartTip.Text" xml:space="preserve">
-    <value>Riavviare l&apos;applicazione per applicare completamente il cambio di lingua.</value>
+    <value>Riavviare l'applicazione per applicare completamente il cambio di lingua.</value>
   </data>
   <data name="SettingsRestartNow.Content" xml:space="preserve">
     <value>Riavvia ora</value>
@@ -455,7 +455,7 @@
     <value>Aggiorna analisi del gamut</value>
   </data>
   <data name="GamutRefreshToolTip" xml:space="preserve">
-    <value>Analizza l&apos;area attualmente visibile</value>
+    <value>Analizza l'area attualmente visibile</value>
   </data>
   <data name="GamutDiagramDescription" xml:space="preserve">
     <value>Diagramma di cromaticità CIE 1931 xy con distribuzione dei colori, limiti della gamma e punto di campionamento</value>
@@ -470,13 +470,13 @@
     <value>Mostra limite gamut BT.2020</value>
   </data>
   <data name="GamutSummaryText.Text" xml:space="preserve">
-    <value>Apri un&apos;immagine e aggiorna l&apos;analisi</value>
+    <value>Apri un'immagine e aggiorna l'analisi</value>
   </data>
   <data name="GamutRecentSampleTitle.Text" xml:space="preserve">
     <value>Campione recente</value>
   </data>
   <data name="ChromaticitySampleText.Text" xml:space="preserve">
-    <value>Sposta il puntatore sull&apos;immagine per visualizzare la posizione del colore</value>
+    <value>Sposta il puntatore sull'immagine per visualizzare la posizione del colore</value>
   </data>
   <data name="ChromaticityGamutText.Text" xml:space="preserve">
     <value>Il mirino indica il punto campione, D65 indica il bianco di riferimento</value>
@@ -485,10 +485,10 @@
     <value>Informazioni sul diagramma del gamut</value>
   </data>
   <data name="GamutAboutDescription.Text" xml:space="preserve">
-    <value>La nuvola di punti mostra la distribuzione dei colori dell&apos;area visibile dopo la mappatura dello schermo; i punti più luminosi indicano maggiore concentrazione. Non indica la copertura del gamut del file o del display. Il nero e i colori non validi sono esclusi. Aggiornare dopo zoom o modifiche. I colori di sfondo sono indicativi; coordinate e limiti seguono gli standard.</value>
+    <value>La nuvola di punti mostra la distribuzione dei colori dell'area visibile dopo la mappatura dello schermo; i punti più luminosi indicano maggiore concentrazione. Non indica la copertura del gamut del file o del display. Il nero e i colori non validi sono esclusi. Aggiornare dopo zoom o modifiche. I colori di sfondo sono indicativi; coordinate e limiti seguono gli standard.</value>
   </data>
   <data name="GamutCieNotice.Text" xml:space="preserve">
-    <value>Luogo spettrale: dati dell&apos;osservatore colorimetrico standard CIE 2019, CIE 1931; convertiti da 380–700 nm a intervalli di 5 nm. CC BY-SA 4.0.</value>
+    <value>Luogo spettrale: dati dell'osservatore colorimetrico standard CIE 2019, CIE 1931; convertiti da 380–700 nm a intervalli di 5 nm. CC BY-SA 4.0.</value>
   </data>
   <data name="GamutCieDataSource.Content" xml:space="preserve">
     <value>Dati e fonti CIE</value>
@@ -509,7 +509,7 @@
     <value>Istogramma RGB, lato sinistro SDR, lato destro alteluci HDR</value>
   </data>
   <data name="HistogramEmptyText.Text" xml:space="preserve">
-    <value>Apri un&apos;immagine e aggiorna l&apos;analisi</value>
+    <value>Apri un'immagine e aggiorna l'analisi</value>
   </data>
   <data name="HistogramWhiteText.Text" xml:space="preserve">
     <value>Scala HDR da +1 a +6 EV</value>
@@ -554,13 +554,13 @@
     <value>Campionamento pixel</value>
   </data>
   <data name="PixelSampleText.Text" xml:space="preserve">
-    <value>Dopo l&apos;aggiornamento, sposta il puntatore sull&apos;immagine</value>
+    <value>Dopo l'aggiornamento, sposta il puntatore sull'immagine</value>
   </data>
   <data name="AnalysisAboutValuesButton.Content" xml:space="preserve">
     <value>Informazioni sui valori di analisi</value>
   </data>
   <data name="AnalysisAboutValuesDescription.Text" xml:space="preserve">
-    <value>Le curve RGB provengono dall&apos;anteprima scRGB dopo la mappatura. La metà sinistra è SDR (scala sRGB) con linea mediana come punto di bianco SDR; ogni linea tratteggiata a destra aggiunge +1 EV, l&apos;estremità destra raccoglie +6 EV e oltre. I canali condividono l&apos;asse verticale con radice quadrata del conteggio pixel. Valori negativi vanno all&apos;estrema sinistra. Le letture di luminanza sono ponderate RGB. Aggiornare dopo le modifiche. Il lato destro usa HDR adattivo.</value>
+    <value>Le curve RGB provengono dall'anteprima scRGB dopo la mappatura. La metà sinistra è SDR (scala sRGB) con linea mediana come punto di bianco SDR; ogni linea tratteggiata a destra aggiunge +1 EV, l'estremità destra raccoglie +6 EV e oltre. I canali condividono l'asse verticale con radice quadrata del conteggio pixel. Valori negativi vanno all'estrema sinistra. Le letture di luminanza sono ponderate RGB. Aggiornare dopo le modifiche. Il lato destro usa HDR adattivo.</value>
   </data>
   <data name="BatchExportTitle" xml:space="preserve">
     <value>Esportazione batch</value>
@@ -653,7 +653,7 @@
     <value>Denominazione file</value>
   </data>
   <data name="BatchExportNamingTip.Text" xml:space="preserve">
-    <value>Numerazione automatica in caso di conflitti, non sovrascrive l&apos;originale.</value>
+    <value>Numerazione automatica in caso di conflitti, non sovrascrive l'originale.</value>
   </data>
   <data name="BatchExportHelpButton.Content" xml:space="preserve">
     <value>Note di esportazione</value>
@@ -710,7 +710,7 @@
     <value>Annulla esportazione</value>
   </data>
   <data name="DeleteDialogTitleFormat" xml:space="preserve">
-    <value>Eliminare &quot;{0}&quot;?</value>
+    <value>Eliminare "{0}"?</value>
   </data>
   <data name="DeleteDialogContent.Text" xml:space="preserve">
     <value>Questo file verrà spostato nel Cestino.</value>
@@ -725,7 +725,7 @@
     <value>OK</value>
   </data>
   <data name="DialogCannotSaveCropTitle" xml:space="preserve">
-    <value>Impossibile salvare l&apos;immagine ritagliata</value>
+    <value>Impossibile salvare l'immagine ritagliata</value>
   </data>
   <data name="StatusMovedToRecycleBinFormat" xml:space="preserve">
     <value>{0} spostato nel Cestino</value>
@@ -737,7 +737,7 @@
     <value>Salvataggio non riuscito: il file originale non ha estensione</value>
   </data>
   <data name="StatusSaveAsSameFile" xml:space="preserve">
-    <value>Salvataggio annullato: la destinazione coincide con l&apos;origine</value>
+    <value>Salvataggio annullato: la destinazione coincide con l'origine</value>
   </data>
   <data name="StatusSaveAsOriginalFormat" xml:space="preserve">
     <value>Salvato nel formato originale: {0}</value>
@@ -749,7 +749,7 @@
     <value>Salvataggio non riuscito: {0}: {1}</value>
   </data>
   <data name="StatusImageCopiedFormat" xml:space="preserve">
-    <value>Immagine copiata, pronta per l&apos;incolla in PowerPoint: {0}</value>
+    <value>Immagine copiata, pronta per l'incolla in PowerPoint: {0}</value>
   </data>
   <data name="StatusCopyImageFailedFormat" xml:space="preserve">
     <value>Copia immagine non riuscita: {0}: {1}</value>
@@ -770,16 +770,16 @@
     <value>Apertura tramite trascinamento non riuscita: {0}: {1}</value>
   </data>
   <data name="StatusDragDropLoadedCountFormat" xml:space="preserve">
-    <value>{0} immagini rilasciate; navigazione nell&apos;ordine di rilascio</value>
+    <value>{0} immagini rilasciate; navigazione nell'ordine di rilascio</value>
   </data>
   <data name="StatusSystemAssociationOpened" xml:space="preserve">
-    <value>Aperto dall&apos;associazione file di sistema</value>
+    <value>Aperto dall'associazione file di sistema</value>
   </data>
   <data name="StatusSystemAssociationOpenedCountFormat" xml:space="preserve">
-    <value>Aperte {0} immagini dall&apos;associazione file di sistema</value>
+    <value>Aperte {0} immagini dall'associazione file di sistema</value>
   </data>
   <data name="StatusOpenFailedFormat" xml:space="preserve">
-    <value>Apertura non riuscita: {0}: {1}</value>
+    <value>Impossibile aprire {0}: {1}: {2}</value>
   </data>
   <data name="StatusLoadingFullResolution" xml:space="preserve">
     <value>Caricamento della risoluzione completa per visualizzazione 1:1...</value>
@@ -839,7 +839,7 @@
     <value>Sconosciuto</value>
   </data>
   <data name="WorkspacePleaseSelectImage" xml:space="preserve">
-    <value>Seleziona un&apos;immagine</value>
+    <value>Seleziona un'immagine</value>
   </data>
   <data name="WorkspaceGainMapNotProbed" xml:space="preserve">
     <value>Non sondato</value>
@@ -872,7 +872,7 @@
     <value>Fuori</value>
   </data>
   <data name="GamutOutOfRange" xml:space="preserve">
-    <value>Fuori dall&apos;intervallo del diagramma</value>
+    <value>Fuori dall'intervallo del diagramma</value>
   </data>
   <data name="LivePhotoStop" xml:space="preserve">
     <value>Interrompi Live Photo</value>
@@ -884,19 +884,19 @@
     <value>Riproduzione Live Photo non riuscita: {0}</value>
   </data>
   <data name="GamutPointerNotValidArea" xml:space="preserve">
-    <value>Il puntatore è esterno all&apos;area valida dell&apos;immagine</value>
+    <value>Il puntatore è esterno all'area valida dell'immagine</value>
   </data>
   <data name="GamutBlackOrInvalid" xml:space="preserve">
     <value>Nero o colore non valido; nessuna coordinata xy valida</value>
   </data>
   <data name="AnalysisSdrNotSupported" xml:space="preserve">
-    <value>L&apos;immagine corrente usa anteprima standard; strumenti HDR non disponibili.</value>
+    <value>L'immagine corrente usa anteprima standard; strumenti HDR non disponibili.</value>
   </data>
   <data name="GamutChangedRefreshPrompt" xml:space="preserve">
-    <value>La visualizzazione è cambiata; aggiorna l&apos;analisi del gamut</value>
+    <value>La visualizzazione è cambiata; aggiorna l'analisi del gamut</value>
   </data>
   <data name="AnalysisNoHdrPreview" xml:space="preserve">
-    <value>L&apos;immagine non è renderizzata in HDR; impossibile leggere i valori scRGB.</value>
+    <value>L'immagine non è renderizzata in HDR; impossibile leggere i valori scRGB.</value>
   </data>
   <data name="AnalysisPixelCountFormat" xml:space="preserve">
     <value>{0} pixel di anteprima analizzati</value>
@@ -905,7 +905,7 @@
     <value>Punto di bianco SDR {0} nit</value>
   </data>
   <data name="PixelSampleInstruction" xml:space="preserve">
-    <value>Sposta il puntatore sull&apos;immagine per campionare</value>
+    <value>Sposta il puntatore sull'immagine per campionare</value>
   </data>
   <data name="GamutColorCountFormat" xml:space="preserve">
     <value>{0} pixel di colore validi · I punti più chiari indicano maggiore densità</value>
@@ -917,14 +917,14 @@
     <value>Visualizzazione non ancora pronta; riprova.</value>
   </data>
   <data name="PixelSampleChangedPrompt" xml:space="preserve">
-    <value>Visualizzazione modificata; aggiorna l&apos;analisi prima di campionare.</value>
+    <value>Visualizzazione modificata; aggiorna l'analisi prima di campionare.</value>
   </data>
   <data name="PixelSampleFormat" xml:space="preserve">
     <value>Anteprima ({0}, {1}) · {2} nit
 scRGB lineare {3}, {4}, {5}</value>
   </data>
   <data name="PixelSampleOutOfBounds" xml:space="preserve">
-    <value>Il mouse non è nell&apos;area valida dell&apos;immagine</value>
+    <value>Il mouse non è nell'area valida dell'immagine</value>
   </data>
   <data name="ViewExitFullScreen" xml:space="preserve">
     <value>Esci da schermo intero</value>
@@ -954,19 +954,19 @@ scRGB lineare {3}, {4}, {5}</value>
     <value>Assoluto</value>
   </data>
   <data name="StatusExportCancelling" xml:space="preserve">
-    <value>Annullamento in corso, attesa termine dell&apos;operazione...</value>
+    <value>Annullamento in corso, attesa termine dell'operazione...</value>
   </data>
   <data name="StatusExportAlreadyInProgress" xml:space="preserve">
-    <value>Un&apos;esportazione è già in corso; attendere. Se una finestra di salvataggio è aperta, completarla o annullarla prima.</value>
+    <value>Un'esportazione è già in corso; attendere. Se una finestra di salvataggio è aperta, completarla o annullarla prima.</value>
   </data>
   <data name="ErrorCropBoundsInvalid" xml:space="preserve">
-    <value>Il riquadro di ritaglio non copre una regione valida dell&apos;immagine; regolalo di nuovo.</value>
+    <value>Il riquadro di ritaglio non copre una regione valida dell'immagine; regolalo di nuovo.</value>
   </data>
   <data name="StatusWritingSdrCropFormat" xml:space="preserve">
     <value>Scrittura del ritaglio SDR: {0}</value>
   </data>
   <data name="StatusDecodingCropRegion" xml:space="preserve">
-    <value>Decodifica dell&apos;area di ritaglio</value>
+    <value>Decodifica dell'area di ritaglio</value>
   </data>
   <data name="StatusEncodingCropFormat" xml:space="preserve">
     <value>Codifica di {0}</value>
@@ -993,19 +993,19 @@ scRGB lineare {3}, {4}, {5}</value>
     <value>Ritaglio fedele Gain Map non riuscito: {0}</value>
   </data>
   <data name="StatusUltraHdrConvertUnavailable" xml:space="preserve">
-    <value>Converti in Ultra HDR non disponibile: il file non contiene dati ricostruibili.</value>
+    <value>Conversione in Gain Map HDR non disponibile: il file corrente non ha dati gain-map o HDR a livello singolo ricostruibili.</value>
   </data>
   <data name="StatusGeneratingUltraHdrFormat" xml:space="preserve">
     <value>Generazione Ultra HDR: {0}</value>
   </data>
   <data name="StatusEncodingGainMapFormat" xml:space="preserve">
-    <value>Codifica JPEG gain map {0}</value>
+    <value>Codifica di {0} Gain Map</value>
   </data>
   <data name="StatusExportedUltraHdrFormat" xml:space="preserve">
-    <value>Convertito in Ultra HDR: {0}; {1}</value>
+    <value>Convertito in Gain Map HDR: {0}; {1}</value>
   </data>
   <data name="StatusUltraHdrConvertFailedFormat" xml:space="preserve">
-    <value>Conversione in Ultra HDR non riuscita: {0}</value>
+    <value>Conversione in Gain Map HDR non riuscita: {0}</value>
   </data>
   <data name="StatusGeneratingSingleLayerHdrFormat" xml:space="preserve">
     <value>Generazione HDR a livello singolo {0}: {1}</value>
@@ -1059,7 +1059,7 @@ scRGB lineare {3}, {4}, {5}</value>
     <value>Continua</value>
   </data>
   <data name="SaveAsAutoEstimateFormat" xml:space="preserve">
-    <value>Stima automatica: {0}% (corrisponde all&apos;anteprima)</value>
+    <value>Stima automatica: {0}% (corrisponde all'anteprima)</value>
   </data>
   <data name="SaveAsAutoEstimateUnavailable" xml:space="preserve">
     <value>Stima automatica: impossibile dai metadati; parametri di anteprima utilizzati</value>
@@ -1077,7 +1077,7 @@ scRGB lineare {3}, {4}, {5}</value>
     <value>Salvataggio come HDR non riuscito: {0}</value>
   </data>
   <data name="SaveAsModeUltraHdrConvert" xml:space="preserve">
-    <value>Converti in JPEG Ultra HDR / gain map</value>
+    <value>Converti in Gain Map HDR</value>
   </data>
   <data name="SaveAsModeGainMapPreserve" xml:space="preserve">
     <value>Salva fedele Gain Map</value>
@@ -1089,7 +1089,7 @@ scRGB lineare {3}, {4}, {5}</value>
     <value>Modalità esportazione: ritaglio fedele Gain Map conservando i parametri di mappatura</value>
   </data>
   <data name="StatusCropModeUltraHdrConvertFormat" xml:space="preserve">
-    <value>Modalità esportazione: conversione in Ultra HDR con rigenerazione base SDR, gain map {0} e metadati</value>
+    <value>Modalità esportazione: Converti in Gain Map HDR, rigenerazione di base SDR, gainmap {0} e metadati dall'HDR ricostruito</value>
   </data>
   <data name="StatusCropModeSingleLayerHdrFormat" xml:space="preserve">
     <value>Modalità esportazione: conversione HDR a livello singolo, destinazione {0}; JXR scrive scRGB, JXL/AVIF/HEIF scrivono i metadati</value>
@@ -1140,7 +1140,7 @@ scRGB lineare {3}, {4}, {5}</value>
     <value>Ritaglio fedele Gain Map non connesso a un backend scrivibile: richiede scenario 4 libultrahdr per reimpacchettare base + gain map. Area {0},{1} {2}x{3} calcolata; nessun file generato. {4}</value>
   </data>
   <data name="StatusUltraHdrNoBackendFormat" xml:space="preserve">
-    <value>Conversione in Ultra HDR non connessa a un backend scrivibile: {0} richiede libultrahdr/libavif/libheif per scrivere i metadati gain map. Area {1},{2} {3}x{4} calcolata; nessun file generato. {5}</value>
+    <value>Conversione in Gain Map HDR priva di backend scrivibile: {0} richiede libultrahdr/libavif/libheif per scrivere metadati gain-map. Regione di ritaglio {1},{2} {3}x{4} calcolata; finestra di salvataggio non mostrata, nessun file generato. {5}</value>
   </data>
   <data name="StatusSingleLayerHdrNoBackendFormat" xml:space="preserve">
     <value>Ritaglio HDR a livello singolo non connesso a un backend scrivibile: richiede strumenti nativi libjxl/libavif/libheif. Area {0},{1} {2}x{3} calcolata; nessun file generato. {4}</value>
@@ -1188,7 +1188,7 @@ scRGB lineare {3}, {4}, {5}</value>
     <value>Ridimensionamento del renderer non riuscito: {0}: {1}</value>
   </data>
   <data name="AnalysisErrorTooLarge" xml:space="preserve">
-    <value>L&apos;anteprima supera gli 8,5 megapixel; riduci la finestra prima di analizzare.</value>
+    <value>L'anteprima supera gli 8,5 megapixel; riduci la finestra prima di analizzare.</value>
   </data>
   <data name="BatchQueueRunningCannotAdd" xml:space="preserve">
     <value>La coda è in esecuzione; al momento non è possibile aggiungere file.</value>
@@ -1204,5 +1204,38 @@ scRGB lineare {3}, {4}, {5}</value>
   </data>
   <data name="ExportFileEmptyNotReplaced" xml:space="preserve">
     <value>Il file esportato è vuoto; il file di destinazione non è stato sostituito.</value>
+  </data>
+  <data name="BatchFormatGainMapHeic" xml:space="preserve">
+    <value>HEIC · Gain Map</value>
+  </data>
+  <data name="BatchFormatGainMapAvif" xml:space="preserve">
+    <value>AVIF · Gain Map</value>
+  </data>
+  <data name="CropUltraHdrBaseGamutP3" xml:space="preserve">
+    <value>Base P3 · Auto</value>
+  </data>
+  <data name="AnalysisAnalyzingPreview" xml:space="preserve">
+    <value>Analisi dell'immagine corrente in corso…</value>
+  </data>
+  <data name="SaveAsGamutDisplayP3AutoToneMapping" xml:space="preserve">
+    <value>Display P3 (mappatura dei toni automatica)</value>
+  </data>
+  <data name="InspectorSectionSelectorName" xml:space="preserve">
+    <value>Pannello dettagli e analisi</value>
+  </data>
+  <data name="ExceptionImageDisplayAreaNotReady" xml:space="preserve">
+    <value>L'area di visualizzazione dell'immagine non è ancora pronta.</value>
+  </data>
+  <data name="ExceptionImageDisplayAreaInvalidSize" xml:space="preserve">
+    <value>Dimensioni dell'area di visualizzazione dell'immagine non valide.</value>
+  </data>
+  <data name="LivePhotoPreparing" xml:space="preserve">
+    <value>Preparazione Live Photo · Fai clic per annullare</value>
+  </data>
+  <data name="StatusSkippedUnopenableFilesFormat" xml:space="preserve">
+    <value>File non apribili ignorati: {0}</value>
+  </data>
+  <data name="FilmstripThumbnailLoadErrorFormat" xml:space="preserve">
+    <value>{0} · Anteprima non disponibile, fai clic per aprire</value>
   </data>
 </root>

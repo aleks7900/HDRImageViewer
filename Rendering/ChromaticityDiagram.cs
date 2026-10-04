@@ -66,18 +66,18 @@ public static class ChromaticityDiagram
     {
         var result = new byte[BinWidth * BinHeight * 4];
         for (var y = 0; y < BinHeight; y++)
-        for (var x = 0; x < BinWidth; x++)
-        {
-            var xy = new Vector2((x + .5f) / BinWidth * MaxX, (y + .5f) / BinHeight * MaxY);
-            if (!InsideLocus(xy)) continue;
-            var rgb = IllustrationColor(xy);
-            var offset = ((BinHeight - 1 - y) * BinWidth + x) * 4;
-            const byte alpha = 48;
-            result[offset] = (byte)(rgb.Z * alpha);
-            result[offset + 1] = (byte)(rgb.Y * alpha);
-            result[offset + 2] = (byte)(rgb.X * alpha);
-            result[offset + 3] = alpha;
-        }
+            for (var x = 0; x < BinWidth; x++)
+            {
+                var xy = new Vector2((x + .5f) / BinWidth * MaxX, (y + .5f) / BinHeight * MaxY);
+                if (!InsideLocus(xy)) continue;
+                var rgb = IllustrationColor(xy);
+                var offset = ((BinHeight - 1 - y) * BinWidth + x) * 4;
+                const byte alpha = 48;
+                result[offset] = (byte)(rgb.Z * alpha);
+                result[offset + 1] = (byte)(rgb.Y * alpha);
+                result[offset + 2] = (byte)(rgb.X * alpha);
+                result[offset + 3] = alpha;
+            }
         return result;
     }
 

@@ -710,7 +710,7 @@
     <value>내보내기 취소</value>
   </data>
   <data name="DeleteDialogTitleFormat" xml:space="preserve">
-    <value>&quot;{0}&quot;을(를) 삭제하시겠습니까?</value>
+    <value>"{0}"을(를) 삭제하시겠습니까?</value>
   </data>
   <data name="DeleteDialogContent.Text" xml:space="preserve">
     <value>이 파일은 휴지통으로 이동됩니다.</value>
@@ -779,7 +779,7 @@
     <value>시스템 파일 연결에서 {0}개의 이미지를 열었습니다</value>
   </data>
   <data name="StatusOpenFailedFormat" xml:space="preserve">
-    <value>열기 실패: {0}: {1}</value>
+    <value>{0} 열기 실패: {1}: {2}</value>
   </data>
   <data name="StatusLoadingFullResolution" xml:space="preserve">
     <value>1:1 표시를 위해 원본 해상도를 로드하는 중...</value>
@@ -993,19 +993,19 @@
     <value>Gain Map 무손실 자르기 실패: {0}</value>
   </data>
   <data name="StatusUltraHdrConvertUnavailable" xml:space="preserve">
-    <value>Ultra HDR로 변환을 사용할 수 없음: 재구성 가능한 게인 맵 또는 단일 레이어 HDR 데이터가 없습니다.</value>
+    <value>Gain Map HDR로 변환을 사용할 수 없음: 현재 파일에 재구성 가능한 gain-map 또는 단일 레이어 HDR 데이터가 없습니다.</value>
   </data>
   <data name="StatusGeneratingUltraHdrFormat" xml:space="preserve">
     <value>Ultra HDR 생성 중: {0}</value>
   </data>
   <data name="StatusEncodingGainMapFormat" xml:space="preserve">
-    <value>{0} 게인 맵 JPEG 인코딩 중</value>
+    <value>{0} Gain Map 인코딩 중</value>
   </data>
   <data name="StatusExportedUltraHdrFormat" xml:space="preserve">
-    <value>Ultra HDR로 변환됨: {0}; {1}</value>
+    <value>Gain Map HDR로 변환됨: {0}; {1}</value>
   </data>
   <data name="StatusUltraHdrConvertFailedFormat" xml:space="preserve">
-    <value>Ultra HDR로 변환 실패: {0}</value>
+    <value>Gain Map HDR 변환 실패: {0}</value>
   </data>
   <data name="StatusGeneratingSingleLayerHdrFormat" xml:space="preserve">
     <value>단일 레이어 HDR {0} 생성 중: {1}</value>
@@ -1077,7 +1077,7 @@
     <value>HDR 다른 이름으로 저장 실패: {0}</value>
   </data>
   <data name="SaveAsModeUltraHdrConvert" xml:space="preserve">
-    <value>Ultra HDR / 게인 맵 JPEG로 변환</value>
+    <value>Gain Map HDR로 변환</value>
   </data>
   <data name="SaveAsModeGainMapPreserve" xml:space="preserve">
     <value>Gain Map 무손실 다른 이름으로 저장</value>
@@ -1089,7 +1089,7 @@
     <value>내보내기 모드: 매핑 매개변수를 유지하면서 베이스/게인 맵을 자르는 Gain Map 무손실 자르기</value>
   </data>
   <data name="StatusCropModeUltraHdrConvertFormat" xml:space="preserve">
-    <value>내보내기 모드: 재구성된 HDR에서 SDR 베이스, {0} 게인 맵 및 메타데이터를 다시 생성하여 Ultra HDR로 변환</value>
+    <value>내보내기 모드: Gain Map HDR로 변환, 재구성된 HDR에서 SDR 베이스, {0} gainmap 및 메타데이터 재생성</value>
   </data>
   <data name="StatusCropModeSingleLayerHdrFormat" xml:space="preserve">
     <value>내보내기 모드: 단일 레이어 HDR 변환, 대상 {0}; JXR은 scRGB를 기록하고 JXL/AVIF/HEIF는 해당 전송 메타데이터를 기록함</value>
@@ -1140,7 +1140,7 @@
     <value>Gain Map 무손실 자르기가 쓰기 가능한 백엔드에 연결되지 않음: 베이스 + 게인 맵을 재패키징하려면 libultrahdr 시나리오 4가 필요합니다. 영역 {0},{1} {2}x{3} 계산됨; 파일이 생성되지 않았습니다. {4}</value>
   </data>
   <data name="StatusUltraHdrNoBackendFormat" xml:space="preserve">
-    <value>Ultra HDR로 변환이 쓰기 가능한 백엔드에 연결되지 않음: {0}의 게인 맵 메타데이터를 쓰려면 libultrahdr/libavif/libheif가 필요합니다. 영역 {1},{2} {3}x{4} 계산됨; 파일이 생성되지 않았습니다. {5}</value>
+    <value>Gain Map HDR로 변환할 쓰기 가능한 백엔드가 연결되지 않음: {0}에서 gain-map 메타데이터를 쓰려면 libultrahdr/libavif/libheif가 필요합니다. 자르기 영역 {1},{2} {3}x{4} 계산됨; 저장 대화 상자가 표시되지 않았고 파일이 생성되지 않았습니다. {5}</value>
   </data>
   <data name="StatusSingleLayerHdrNoBackendFormat" xml:space="preserve">
     <value>단일 레이어 HDR 자르기가 쓰기 가능한 백엔드에 연결되지 않음: 네이티브 libjxl/libavif/libheif 도구가 필요합니다. 영역 {0},{1} {2}x{3} 계산됨; 파일이 생성되지 않았습니다. {4}</value>
@@ -1204,5 +1204,38 @@
   </data>
   <data name="ExportFileEmptyNotReplaced" xml:space="preserve">
     <value>내보낸 파일이 비어 있습니다. 대상 파일이 대체되지 않았습니다.</value>
+  </data>
+  <data name="BatchFormatGainMapHeic" xml:space="preserve">
+    <value>HEIC · Gain Map</value>
+  </data>
+  <data name="BatchFormatGainMapAvif" xml:space="preserve">
+    <value>AVIF · Gain Map</value>
+  </data>
+  <data name="CropUltraHdrBaseGamutP3" xml:space="preserve">
+    <value>Base P3 · 자동</value>
+  </data>
+  <data name="AnalysisAnalyzingPreview" xml:space="preserve">
+    <value>현재 이미지를 분석하는 중…</value>
+  </data>
+  <data name="SaveAsGamutDisplayP3AutoToneMapping" xml:space="preserve">
+    <value>Display P3 (자동 톤 매핑)</value>
+  </data>
+  <data name="InspectorSectionSelectorName" xml:space="preserve">
+    <value>세부 정보 및 분석 패널</value>
+  </data>
+  <data name="ExceptionImageDisplayAreaNotReady" xml:space="preserve">
+    <value>이미지 표시 영역이 아직 준비되지 않았습니다.</value>
+  </data>
+  <data name="ExceptionImageDisplayAreaInvalidSize" xml:space="preserve">
+    <value>이미지 표시 영역 크기가 잘못되었습니다.</value>
+  </data>
+  <data name="LivePhotoPreparing" xml:space="preserve">
+    <value>라이브 포토 준비 중 · 취소하려면 클릭</value>
+  </data>
+  <data name="StatusSkippedUnopenableFilesFormat" xml:space="preserve">
+    <value>열 수 없는 파일을 건너뛰었습니다: {0}</value>
+  </data>
+  <data name="FilmstripThumbnailLoadErrorFormat" xml:space="preserve">
+    <value>{0} · 미리보기를 사용할 수 없습니다. 클릭하여 열기</value>
   </data>
 </root>

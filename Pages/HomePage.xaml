@@ -111,11 +111,10 @@
         <Style
             x:Key="FilmstripListViewItemStyle"
             TargetType="ListViewItem">
-            <Setter Property="Width" Value="64" />
-            <Setter Property="Height" Value="46" />
+            <Setter Property="Height" Value="60" />
             <Setter Property="MinWidth" Value="0" />
             <Setter Property="Margin" Value="2,0" />
-            <Setter Property="Padding" Value="0" />
+            <Setter Property="Padding" Value="2,0" />
             <Setter Property="HorizontalContentAlignment" Value="Stretch" />
             <Setter Property="VerticalContentAlignment" Value="Stretch" />
         </Style>
@@ -394,8 +393,7 @@
                     VerticalAlignment="Center"
                     AutomationProperties.AutomationId="SidePreviousImageButton"
                     Click="PreviousImage_Click"
-                    Style="{StaticResource SideNavigationButtonStyle}"
-                    >
+                    Style="{StaticResource SideNavigationButtonStyle}">
                     <FontIcon
                         FontSize="20"
                         Glyph="&#xE76B;" />
@@ -407,8 +405,7 @@
                     VerticalAlignment="Center"
                     AutomationProperties.AutomationId="SideNextImageButton"
                     Click="NextImage_Click"
-                    Style="{StaticResource SideNavigationButtonStyle}"
-                    >
+                    Style="{StaticResource SideNavigationButtonStyle}">
                     <FontIcon
                         FontSize="20"
                         Glyph="&#xE76C;" />
@@ -453,8 +450,7 @@
                         x:Name="TopFullScreenButton"
                         AutomationProperties.AutomationId="TopFullScreenButton"
                         Click="FullScreen_Click"
-                        Style="{StaticResource PhotoToolbarButtonStyle}"
-                        >
+                        Style="{StaticResource PhotoToolbarButtonStyle}">
                         <FontIcon
                             x:Name="TopFullScreenIcon"
                             FontSize="16"
@@ -741,12 +737,10 @@
                                 
                                 Width="128"
                                 SelectedIndex="0"
+                                IsEnabled="False"
                                 SelectionChanged="CropUltraHdrBaseGamutSelector_SelectionChanged"
                                 Visibility="Collapsed">
-                                <ComboBoxItem Content="Base Auto" />
-                                <ComboBoxItem Content="Base sRGB" />
-                                <ComboBoxItem Content="Base P3" />
-                                <ComboBoxItem Content="Base BT.2020" />
+                                <ComboBoxItem x:Name="CropUltraHdrBaseGamutP3Item" x:Uid="CropUltraHdrBaseGamutP3" />
                             </ComboBox>
                             <Button
                                 x:Name="CancelCropButton"
@@ -763,6 +757,9 @@
                 </Grid>
                 <Border
                     x:Name="PhotoToolbarOverlay"
+                    PointerEntered="ViewerChrome_PointerEntered"
+                    PointerExited="ViewerChrome_PointerExited"
+                    GotFocus="ViewerChrome_GotFocus"
                     MaxWidth="1180"
                     Margin="16,0,16,16"
                     Padding="12,8"
@@ -777,8 +774,9 @@
                         <TranslateTransform x:Name="PhotoToolbarOverlayTransform" Y="0" />
                     </Border.RenderTransform>
                     <Grid
-                        HorizontalAlignment="Center"
-                        ColumnSpacing="8">
+                        x:Name="PhotoCommandsGrid"
+                        HorizontalAlignment="Stretch"
+                        ColumnSpacing="6">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="Auto" />
@@ -826,8 +824,7 @@
                             Grid.Column="3"
                             AutomationProperties.AutomationId="PreviousImageButton"
                             Click="PreviousImage_Click"
-                            Style="{StaticResource PhotoToolbarButtonStyle}"
-                            >
+                            Style="{StaticResource PhotoToolbarButtonStyle}">
                             <FontIcon
                                 FontSize="16"
                                 Glyph="&#xE76B;" />
@@ -843,16 +840,16 @@
                         <Grid
                             x:Name="FilmstripRow"
                             Grid.Column="5"
-                            Height="46"
+                            Height="64"
                             MinWidth="0"
                             HorizontalAlignment="Stretch"
                             Visibility="Collapsed">
                             <ListView
                                 x:Name="ImageFilmstrip"
-                                Height="46"
+                                Height="64"
                                 HorizontalAlignment="Stretch"
                                 AutomationProperties.AutomationId="ImageFilmstrip"
-                                
+                                ContainerContentChanging="ImageFilmstrip_ContainerContentChanging"
                                 Background="Transparent"
                                 BorderThickness="0"
                                 IsItemClickEnabled="True"
@@ -872,11 +869,12 @@
                                 <ListView.ItemTemplate>
                                     <DataTemplate x:DataType="presentation:FilmstripImageItem">
                                         <Grid
-                                            Width="60"
-                                            Height="42"
+                                            Width="{x:Bind PreviewWidth, Mode=OneWay}"
+                                            Height="56"
+                                            SizeChanged="FilmstripThumbnail_SizeChanged"
                                             HorizontalAlignment="Center"
                                             VerticalAlignment="Center"
-                                            ToolTipService.ToolTip="{x:Bind FileName}">
+                                            ToolTipService.ToolTip="{x:Bind PreviewDescription, Mode=OneWay}">
                                             <Border
                                                 Background="{ThemeResource AccentFillColorTertiaryBrush}"
                                                 BorderBrush="{ThemeResource AccentFillColorDefaultBrush}"
@@ -896,11 +894,12 @@
                                                         VerticalAlignment="Center"
                                                         FontSize="16"
                                                         Foreground="{ThemeResource TextFillColorTertiaryBrush}"
-                                                        Glyph="&#xEB9F;" />
+                                                        Glyph="{x:Bind local:HomePage.ThumbnailPlaceholderGlyph(HasLoadError), Mode=OneWay}"
+                                                        Visibility="{x:Bind local:HomePage.InverseBoolToVisibility(HasThumbnail), Mode=OneWay}" />
                                                     <Image
                                                         AutomationProperties.Name="{x:Bind FileName}"
                                                         Source="{x:Bind Thumbnail, Mode=OneWay}"
-                                                        Stretch="UniformToFill" />
+                                                        Stretch="Uniform" />
                                                 </Grid>
                                             </Border>
                                         </Grid>
@@ -911,7 +910,8 @@
                         <TextBlock
                             x:Name="FolderFileNameText"
                             Grid.Column="5"
-                            MinWidth="220"
+                            MinWidth="0"
+                            ToolTipService.ToolTip="{x:Bind ViewModel.FileName, Mode=OneWay}"
                             VerticalAlignment="Center"
                             FontWeight="SemiBold"
                             Text="{x:Bind ViewModel.FileName, Mode=OneWay}"
@@ -922,8 +922,7 @@
                             Grid.Column="6"
                             AutomationProperties.AutomationId="NextImageButton"
                             Click="NextImage_Click"
-                            Style="{StaticResource PhotoToolbarButtonStyle}"
-                            >
+                            Style="{StaticResource PhotoToolbarButtonStyle}">
                             <FontIcon
                                 FontSize="16"
                                 Glyph="&#xE76C;" />
@@ -1018,8 +1017,7 @@
                             AutomationProperties.AutomationId="FullScreenButton"
                             Click="FullScreen_Click"
                             Visibility="Collapsed"
-                            Style="{StaticResource PhotoToolbarButtonStyle}"
-                            >
+                            Style="{StaticResource PhotoToolbarButtonStyle}">
                             <FontIcon
                                 x:Name="FullScreenIcon"
                                 FontSize="16"
@@ -1056,7 +1054,7 @@
                 </Border.RenderTransform>
                 <Grid RowSpacing="16">
                     <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
-                    <SelectorBar x:Name="InspectorSectionSelector" SelectionChanged="InspectorSection_SelectionChanged">
+                    <SelectorBar x:Name="InspectorSectionSelector" AutomationProperties.AutomationId="InspectorSectionSelector" SelectionChanged="InspectorSection_SelectionChanged">
                         <SelectorBarItem x:Name="InspectorDetailsTab" x:Uid="InspectorTabDetails" IsSelected="True" />
                         <SelectorBarItem x:Name="InspectorAnalysisTab" x:Uid="InspectorTabAnalysis" />
                         <SelectorBarItem x:Name="InspectorGamutTab" x:Uid="InspectorTabGamut" />
@@ -1170,25 +1168,35 @@
                             </ComboBox>
                             <Grid
                                 x:Name="SdrWhitePanel"
-                                ColumnSpacing="8">
+                                ColumnSpacing="8"
+                                RowSpacing="8">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto" />
                                     <ColumnDefinition Width="*" />
                                 </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+                                <TextBlock
+                                    x:Name="SdrWhiteHeaderLabel"
+                                    Grid.ColumnSpan="2"
+                                    TextWrapping="Wrap" />
                                 <ToggleSwitch
                                     x:Name="SdrWhiteOverrideToggle"
+                                    Grid.Row="1"
                                     AutomationProperties.AutomationId="SdrWhiteOverrideToggle"
-                                    
-                                    
-                                    
+                                    MinWidth="0"
                                     IsOn="False"
                                     Toggled="SdrWhiteOverrideToggle_Toggled" />
                                 <TextBlock
                                     x:Name="SdrWhiteValueText"
+                                    Grid.Row="1"
                                     Grid.Column="1"
-                                    HorizontalAlignment="Right"
-                                    VerticalAlignment="Bottom"
+                                    VerticalAlignment="Center"
                                     Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                    TextAlignment="Right"
+                                    TextWrapping="Wrap"
                                     x:Uid="InspectorAbsolute203Nits" />
                             </Grid>
                             <Slider
