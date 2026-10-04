@@ -1,4 +1,5 @@
 using HdrImageViewer.Services;
+using HdrImageViewer.Presentation;
 using Microsoft.UI.Xaml;
 
 namespace HdrImageViewer.Pages;
@@ -35,7 +36,13 @@ public sealed partial class HomePage
         _isFolderNavigationLoading = true;
         try
         {
-            await LoadImagePathAsync(_folderImagePaths[nextIndex], invalidateRendererCache: false, preserveNavigationList: true);
+            var failed = await ImageNavigationContext.NavigateAsync(_folderImagePaths.ToArray(), _currentFolderIndex, direction,
+                path => LoadImagePathAsync(path, invalidateRendererCache: false, preserveNavigationList: true), _lifetime.Token);
+            if (failed.Count > 0)
+                ViewModel.UpdateRenderStatus($"{ViewModel.RenderStatus}; 已跳过无法打开的文件: {string.Join("、", failed.Select(Path.GetFileName))}");
+        }
+        catch (OperationCanceledException)
+        {
         }
         finally
         {

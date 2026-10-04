@@ -5,6 +5,49 @@ namespace HdrImageViewer.Tests;
 
 public sealed class ImageNavigationContextTests
 {
+    [Theory]
+    [InlineData(0, 1, "bad.HDR,broken.png,b.jpg")]
+    [InlineData(3, -1, "broken.png,bad.HDR,a.jpg")]
+    public async Task NavigationSkipsConsecutiveFailuresInEitherDirection(int start, int direction, string expected)
+    {
+        string[] paths = ["a.jpg", "bad.HDR", "broken.png", "b.jpg"];
+        var attempts = new List<string>();
+        var failed = await ImageNavigationContext.NavigateAsync(paths, start, direction, path =>
+        {
+            attempts.Add(path);
+            return Task.FromResult(path.EndsWith(".jpg", StringComparison.Ordinal)
+                ? ImageLoadOutcome.Opened : ImageLoadOutcome.Failed);
+        }, CancellationToken.None);
+        Assert.Equal(expected.Split(','), attempts);
+        Assert.Equal(2, failed.Count);
+    }
+
+    [Fact]
+    public async Task AllFailuresStopAtBoundaryWithoutRetryingOrWrapping()
+    {
+        string[] paths = ["a.jpg", "bad.HDR", "bad2.HDR"];
+        var attempts = new List<string>();
+        var failed = await ImageNavigationContext.NavigateAsync(paths, 0, 1, path =>
+        {
+            attempts.Add(path);
+            return Task.FromResult(ImageLoadOutcome.Failed);
+        }, CancellationToken.None);
+        Assert.Equal(paths.Skip(1), attempts);
+        Assert.Equal(attempts, failed);
+    }
+
+    [Fact]
+    public async Task SupersededOpenDoesNotContinueIntoAnotherFile()
+    {
+        var attempts = new List<string>();
+        await ImageNavigationContext.NavigateAsync(["a.jpg", "b.jpg", "c.jpg"], 0, 1, path =>
+        {
+            attempts.Add(path);
+            return Task.FromResult(ImageLoadOutcome.Canceled);
+        }, CancellationToken.None);
+        Assert.Equal(["b.jpg"], attempts);
+    }
+
     [Fact]
     public void ConsecutiveNavigationKeepsCrossFolderSelectionAndOrder()
     {

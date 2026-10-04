@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.35.0 - 2026-10-04
+
+- Folder stepping now skips files that fail to open instead of repeatedly retrying the same unsupported or corrupt image. Filmstrip previews prefer direct decoding over decorated shell thumbnails and correct provisional aspect ratios when final pixels arrive.
+- Unified viewer motion: panels enter with cubic deceleration and leave along the same path with cubic acceleration; interrupted motion resumes at its current position. Zoom follows rendering frames and elapsed time, including fit/fill/1:1 actions, and keeps swap-chain dimensions stable during gestures. Custom motion follows the system animation setting.
+- Kept the toolbar visible while hovered or keyboard-focused, stabilized filmstrip proportions before refined thumbnails arrive, and prepared decoded images before replacing the visible document. Image handoff no longer explicitly redraws the old image using the next image's layout.
+
 ## 1.0.34.0 - 2026-10-04
 
 - Fixed HDR filmstrip appearance: gain-map images now preview their authored SDR base instead of reconstructing maximum HDR gain and applying another fixed ACES curve. Single-layer HDR thumbnails use the viewer's SDR white reference and compress highlights with a shared RGB scale, preserving midtones and color ratios.

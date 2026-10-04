@@ -172,6 +172,17 @@ public sealed partial class HomePage
         var contentHeight = ImageViewport.Height > 0.0
             ? ImageViewport.Height
             : Math.Max(previewHeight, imageHeight);
+        // Keep the swap chain at viewport size throughout a zoom. Only the
+        // image's shader transform changes; do not resize buffers every frame.
+        if (_isZoomPreviewActive)
+        {
+            var image = ViewerViewportMath.CalculateVisibleImageLayout(previewWidth, previewHeight,
+                imageWidth, imageHeight, contentWidth, contentHeight,
+                _layoutScrollX ?? ImageScroller?.HorizontalOffset ?? 0,
+                _layoutScrollY ?? ImageScroller?.VerticalOffset ?? 0);
+            return new ViewerSwapChainHostLayout(previewWidth, previewHeight,
+                image.ScaleX, image.ScaleY, image.OffsetX, image.OffsetY);
+        }
         return ViewerViewportMath.CalculateSwapChainHostLayout(
             previewWidth,
             previewHeight,
@@ -261,7 +272,7 @@ public sealed partial class HomePage
                 _swapChainHostContained = true;
             }
 
-            HdrSwapChainHost.UpdateLayout();
+            if (!_isZoomPreviewActive) HdrSwapChainHost.UpdateLayout();
         }
         finally
         {

@@ -35,6 +35,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="..\..\Presentation\ViewerMotion.cs" Link="ViewerMotion.cs" />
+    <Compile Include="..\..\Presentation\FilmstripPreviewGeometry.cs" Link="FilmstripPreviewGeometry.cs" />
     <Compile Include="..\..\Services\ExifOrientationTransform.cs" Link="ExifOrientationTransform.cs" />
     <Compile Include="..\..\Services\BitmapPreviewResampler.cs" Link="BitmapPreviewResampler.cs" />
     <Compile Include="..\..\Services\ThumbnailPixelConverter.cs" Link="ThumbnailPixelConverter.cs" />

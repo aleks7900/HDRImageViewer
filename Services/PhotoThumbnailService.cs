@@ -10,6 +10,21 @@ namespace HdrImageViewer.Services;
 
 public static class PhotoThumbnailService
 {
+    internal static async Task<(uint Width, uint Height)?> TryGetOrientedSizeAsync(string path, CancellationToken cancellationToken)
+    {
+        try
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var file = await StorageFile.GetFileFromPathAsync(path);
+            using var stream = await file.OpenReadAsync();
+            var decoder = await BitmapDecoder.CreateAsync(stream);
+            cancellationToken.ThrowIfCancellationRequested();
+            return (decoder.OrientedPixelWidth, decoder.OrientedPixelHeight);
+        }
+        catch (OperationCanceledException) { throw; }
+        catch { return null; } // Native-only formats resolve dimensions from their first thumbnail.
+    }
+
     public static async Task<ImageSource?> CreateAsync(
         string path,
         uint maxPixelSize = 256,
@@ -93,13 +108,10 @@ public static class PhotoThumbnailService
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        // SDR images (and quick placeholders for HDR images) use the Windows
-        // shell thumbnail: it comes from the OS thumbnail cache, so repeat visits
-        // avoid decoding the original file at all. Decode an explicit stream
-        // when the shell cannot produce a thumbnail; arbitrary file:// URIs
-        // can fail silently in a packaged app.
-        return await TryCreateShellThumbnailAsync(path, maxPixelSize, cancellationToken)
-            ?? await TryCreateStreamThumbnailAsync(path, maxPixelSize, cancellationToken);
+        // Decode the image itself first: shell thumbnails can contain baked-in
+        // letterboxing or decoration that cannot be removed by resizing XAML.
+        return await TryCreateStreamThumbnailAsync(path, maxPixelSize, cancellationToken)
+            ?? await TryCreateShellThumbnailAsync(path, maxPixelSize, cancellationToken);
     }
 
     private static async Task<ImageSource?> TryCreateShellThumbnailAsync(

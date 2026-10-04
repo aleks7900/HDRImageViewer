@@ -1,4 +1,4 @@
-using HdrImageViewer.Infrastructure;
+﻿using HdrImageViewer.Infrastructure;
 using HdrImageViewer.Rendering;
 using HdrImageViewer.Models;
 using HdrImageViewer.Presentation;
@@ -43,12 +43,10 @@ public sealed partial class HomePage : Page
 {
     private const uint MonitorDefaultToNearest = 2;
     private const int ZoomRenderDebounceMilliseconds = 60;
-    private const int ZoomAnimationFrameMilliseconds = 16;
     private const int ViewerChromeAutoHideMilliseconds = 2200;
     private const int ViewerChromeAnimationMilliseconds = 160;
     private const int InspectorAnimationMilliseconds = 180;
     private const double InspectorAnimationOffset = 24.0;
-    private const double ZoomAnimationCatchUp = 0.58;
     private const double MinCropWidth = 96.0;
     private const double MinCropHeight = 72.0;
     private const double InspectorPanelWidth = 352.0;
@@ -56,7 +54,6 @@ public sealed partial class HomePage : Page
     private const double ViewerChromeHorizontalInset = 32.0;
     private const double ViewerChromeMaxWidth = 1180.0;
     private const double CompactViewerChromeBreakpoint = 860.0;
-    private const double FilmstripItemWidth = 88.0;
     private const double PanMoveThreshold = 3.0;
 
     private readonly D3D11HdrRenderPipeline _renderer = new();
@@ -97,7 +94,14 @@ public sealed partial class HomePage : Page
     private CancellationTokenSource? _folderRefreshCts;
     private CancellationTokenSource? _zoomRenderCts;
     private CancellationTokenSource? _actualSizeCts;
-    private Microsoft.UI.Dispatching.DispatcherQueueTimer? _zoomAnimationTimer;
+    private bool _zoomRenderingAttached;
+    private bool _zoomRetargetPending;
+    private bool _zoomTargetFit;
+    private bool _zoomTargetFill;
+    private readonly RetargetableViewerMotion _zoomMotion = new(1);
+    private readonly Windows.UI.ViewManagement.UISettings _motionSettings = new();
+    private Storyboard? _viewerChromeStoryboard;
+    private bool _isPointerOverViewerChrome;
     private Microsoft.UI.Dispatching.DispatcherQueueTimer? _viewerChromeHideTimer;
     private Storyboard? _inspectorStoryboard;
     private bool _isViewerChromeVisible = true;
@@ -124,6 +128,10 @@ public sealed partial class HomePage : Page
     private bool _isExportInProgress;
     private bool _useXamlFallbackLayoutAspectRatio;
     private double? _xamlFallbackDisplayAspectRatio;
+    private double? _preparedDisplayAspectRatio;
+    private uint _fallbackPixelWidth;
+    private uint _fallbackPixelHeight;
+    private sealed record PreparedSdrFrame(BitmapImage Bitmap, uint Width, uint Height);
     private MediaPlayer? _livePhotoMediaPlayer;
     private bool _isCompanionMediaPlaybackActive;
     private IntPtr _cachedMonitorHandle;
@@ -177,9 +185,6 @@ public sealed partial class HomePage : Page
         _filmstripViewportTimer.IsRepeating = false;
         _filmstripViewportTimer.Tick += (_, _) => QueueVisibleFilmstripThumbnails();
         RegisterKeyboardAccelerators();
-        _zoomAnimationTimer = DispatcherQueue.CreateTimer();
-        _zoomAnimationTimer.Interval = TimeSpan.FromMilliseconds(ZoomAnimationFrameMilliseconds);
-        _zoomAnimationTimer.Tick += ZoomAnimationTimer_Tick;
         _viewerChromeHideTimer = DispatcherQueue.CreateTimer();
         _viewerChromeHideTimer.Interval = TimeSpan.FromMilliseconds(ViewerChromeAutoHideMilliseconds);
         _viewerChromeHideTimer.Tick += ViewerChromeHideTimer_Tick;
@@ -292,8 +297,10 @@ public sealed partial class HomePage : Page
     private void HomePage_Unloaded(object sender, RoutedEventArgs e)
     {
         StopCompanionMediaPlayback(resetSource: true);
+        _inspectorStoryboard?.Stop();
+        _viewerChromeStoryboard?.Stop();
         DetachSettingsChanged();
-        _zoomAnimationTimer?.Stop();
+        DetachZoomRendering();
         _viewportPresentTimer?.Stop();
 
         if (_displayInformation is not null && _isDisplayInformationEventAttached)
@@ -380,8 +387,8 @@ public sealed partial class HomePage : Page
         }
 
         var shouldAnimate = _hasAppliedInspectorLayout
-            && !overlayChanged && !_inspectorIsOverlay
-            && new Windows.UI.ViewManagement.UISettings().AnimationsEnabled;
+            && !overlayChanged
+            && _motionSettings.AnimationsEnabled;
         _hasAppliedInspectorLayout = true;
         if (!shouldAnimate)
         {
@@ -390,196 +397,6 @@ public sealed partial class HomePage : Page
         }
 
         AnimateInspectorLayout(showInspector);
-    }
-
-    private void SetInspectorLayoutImmediate(bool showInspector)
-    {
-        _inspectorStoryboard?.Stop();
-        _inspectorStoryboard = null;
-        _inspectorTargetVisible = showInspector;
-        InspectorColumn.Width = showInspector && !_inspectorIsOverlay ? new GridLength(InspectorPanelWidth) : new GridLength(0);
-        InspectorPanel.Visibility = showInspector ? Visibility.Visible : Visibility.Collapsed;
-        InspectorPanel.Opacity = 1.0;
-        InspectorPanelTransform.X = 0.0;
-    }
-
-    private void AnimateInspectorLayout(bool showInspector)
-    {
-        if (_inspectorTargetVisible == showInspector && _inspectorStoryboard is not null)
-        {
-            return;
-        }
-
-        _inspectorStoryboard?.Stop();
-        _inspectorStoryboard = null;
-        _inspectorTargetVisible = showInspector;
-
-        if (showInspector)
-        {
-            InspectorColumn.Width = new GridLength(InspectorPanelWidth);
-            InspectorPanel.Visibility = Visibility.Visible;
-            InspectorPanel.Opacity = 1.0;
-            InspectorPanelTransform.X = 0.0;
-        }
-        else if (InspectorPanel.Visibility != Visibility.Visible)
-        {
-            SetInspectorLayoutImmediate(showInspector: false);
-            return;
-        }
-
-        var storyboard = new Storyboard();
-        var duration = new Duration(TimeSpan.FromMilliseconds(InspectorAnimationMilliseconds));
-        var easing = new CubicEase
-        {
-            EasingMode = showInspector ? EasingMode.EaseOut : EasingMode.EaseIn,
-        };
-        AddDoubleAnimation(
-            storyboard,
-            InspectorPanel,
-            "Opacity",
-            showInspector ? 0.0 : 1.0,
-            showInspector ? 1.0 : 0.0,
-            duration,
-            easing);
-        AddDoubleAnimation(
-            storyboard,
-            InspectorPanelTransform,
-            "X",
-            showInspector ? InspectorAnimationOffset : 0.0,
-            showInspector ? 0.0 : InspectorAnimationOffset,
-            duration,
-            easing);
-        storyboard.Completed += (_, _) =>
-        {
-            storyboard.Stop();
-            if (_inspectorTargetVisible != showInspector)
-            {
-                return;
-            }
-
-            _inspectorStoryboard = null;
-            if (showInspector)
-            {
-                InspectorPanel.Opacity = 1.0;
-                InspectorPanelTransform.X = 0.0;
-            }
-            else
-            {
-                InspectorPanel.Visibility = Visibility.Collapsed;
-                InspectorColumn.Width = new GridLength(0);
-                InspectorPanel.Opacity = 1.0;
-                InspectorPanelTransform.X = 0.0;
-            }
-        };
-        _inspectorStoryboard = storyboard;
-        storyboard.Begin();
-    }
-
-    private void ViewerChromeHideTimer_Tick(Microsoft.UI.Dispatching.DispatcherQueueTimer sender, object args)
-    {
-        sender.Stop();
-        if (ViewModel.HasImage && !_isCropModeEnabled)
-        {
-            SetViewerChromeVisible(false, animate: true);
-        }
-    }
-
-    private void ShowViewerChromeTemporarily()
-    {
-        if (!ViewModel.HasImage || _isCropModeEnabled)
-        {
-            _viewerChromeHideTimer?.Stop();
-            SetViewerChromeVisible(true, animate: false);
-            return;
-        }
-
-        SetViewerChromeVisible(true, animate: true);
-        _viewerChromeHideTimer?.Stop();
-        _viewerChromeHideTimer?.Start();
-    }
-
-    private void SetViewerChromeVisible(bool visible, bool animate)
-    {
-        if (PhotoToolbarOverlay is null || PhotoToolbarOverlayTransform is null)
-        {
-            return;
-        }
-
-        if (_isViewerChromeVisible == visible && PhotoToolbarOverlay.Visibility == Visibility.Visible)
-        {
-            return;
-        }
-
-        _isViewerChromeVisible = visible;
-        if (!animate)
-        {
-            PhotoToolbarOverlay.Opacity = visible ? 1.0 : 0.0;
-            PhotoToolbarOverlayTransform.Y = visible ? 0.0 : 18.0;
-            PhotoToolbarOverlay.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
-            return;
-        }
-
-        if (visible)
-        {
-            PhotoToolbarOverlay.Visibility = Visibility.Visible;
-        }
-
-        var storyboard = new Storyboard();
-        var duration = new Duration(TimeSpan.FromMilliseconds(ViewerChromeAnimationMilliseconds));
-        AddDoubleAnimation(storyboard, PhotoToolbarOverlay, "Opacity", visible ? 1.0 : 0.0, duration);
-        AddDoubleAnimation(storyboard, PhotoToolbarOverlayTransform, "Y", visible ? 0.0 : 18.0, duration);
-        if (!visible)
-        {
-            storyboard.Completed += (_, _) =>
-            {
-                if (!_isViewerChromeVisible)
-                {
-                    PhotoToolbarOverlay.Visibility = Visibility.Collapsed;
-                }
-            };
-        }
-
-        storyboard.Begin();
-    }
-
-    private static void AddDoubleAnimation(
-        Storyboard storyboard,
-        DependencyObject target,
-        string path,
-        double to,
-        Duration duration)
-    {
-        var animation = new DoubleAnimation
-        {
-            To = to,
-            Duration = duration,
-            EnableDependentAnimation = true,
-        };
-        Storyboard.SetTarget(animation, target);
-        Storyboard.SetTargetProperty(animation, path);
-        storyboard.Children.Add(animation);
-    }
-
-    private static void AddDoubleAnimation(
-        Storyboard storyboard,
-        DependencyObject target,
-        string path,
-        double from,
-        double to,
-        Duration duration,
-        EasingFunctionBase? easingFunction = null)
-    {
-        var animation = new DoubleAnimation
-        {
-            From = from,
-            To = to,
-            Duration = duration,
-            EnableDependentAnimation = true,
-            EasingFunction = easingFunction,
-        };
-        Storyboard.SetTarget(animation, target);
-        Storyboard.SetTargetProperty(animation, path);
-        storyboard.Children.Add(animation);
     }
 
     private async Task ApplyViewportResizeAsync()
@@ -718,44 +535,36 @@ public sealed partial class HomePage : Page
         await LoadImagePathAsync(ViewModel.FilePath, invalidateRendererCache: true, preserveNavigationList: true);
     }
 
+    private static async Task<PreparedSdrFrame> PrepareSdrFallbackImageAsync(string path, int decodePixelWidth, CancellationToken cancellationToken)
+    {
+        var file = await StorageFile.GetFileFromPathAsync(path);
+        using var stream = await file.OpenReadAsync();
+        cancellationToken.ThrowIfCancellationRequested();
+        var decoder = await BitmapDecoder.CreateAsync(stream);
+        var width = decoder.OrientedPixelWidth;
+        var height = decoder.OrientedPixelHeight;
+        stream.Seek(0);
+        var bitmap = new BitmapImage { DecodePixelWidth = decodePixelWidth };
+        await bitmap.SetSourceAsync(stream);
+        cancellationToken.ThrowIfCancellationRequested();
+        return new PreparedSdrFrame(bitmap, width, height);
+    }
+
+    private void CommitSdrFallbackImage(PreparedSdrFrame frame)
+    {
+        _fallbackPixelWidth = frame.Width;
+        _fallbackPixelHeight = frame.Height;
+        SetXamlFallbackDisplayAspectRatio(frame.Bitmap.PixelWidth, frame.Bitmap.PixelHeight);
+        FallbackImage.Source = frame.Bitmap;
+        ShowFallbackImageLayer();
+        UpdateImageSurfaceLayout();
+    }
+
     private async Task ShowSdrFallbackImageAsync(string path, CancellationToken cancellationToken)
     {
-        try
-        {
-            // Packaged WinUI 3 apps cannot reliably load arbitrary file:// paths
-            // through BitmapImage.UriSource (it loads asynchronously and fails
-            // silently rather than throwing), so stream the file in explicitly.
-            var file = await StorageFile.GetFileFromPathAsync(path);
-            using var stream = await file.OpenReadAsync();
-            cancellationToken.ThrowIfCancellationRequested();
-            var bitmap = new BitmapImage
-            {
-                DecodePixelWidth = CalculateViewerPreloadMaxPixelSize(),
-            };
-            await bitmap.SetSourceAsync(stream);
-            cancellationToken.ThrowIfCancellationRequested();
-            SetXamlFallbackDisplayAspectRatio(bitmap.PixelWidth, bitmap.PixelHeight);
-            FallbackImage.Source = bitmap;
-            ShowFallbackImageLayer();
-            UpdateImageSurfaceLayout();
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            // Last resort: keep the URI-based attempt so behaviour never
-            // regresses on hosts where the stream path is unavailable.
-            FallbackImage.Source = new BitmapImage
-            {
-                DecodePixelWidth = CalculateViewerPreloadMaxPixelSize(),
-                UriSource = new Uri(path),
-            };
-            ShowFallbackImageLayer();
-            UpdateImageSurfaceLayout();
-        }
+        var bitmap = await PrepareSdrFallbackImageAsync(path, CalculateViewerPreloadMaxPixelSize(), cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+        CommitSdrFallbackImage(bitmap);
     }
 
     private void SetXamlFallbackDisplayAspectRatio(int pixelWidth, int pixelHeight)
@@ -784,6 +593,19 @@ public sealed partial class HomePage : Page
         _renderer.RestoreSwapChainPanelBinding();
     }
 
+    private double? GetPreparedDisplayAspectRatio(HdrImageDocument document)
+    {
+        var modified = File.GetLastWriteTimeUtc(document.Path);
+        int? size = DecoderCatalog.IsJpegXrExtension(Path.GetExtension(document.Path)) ? null : CalculateViewerPreloadMaxPixelSize();
+        if (document.HasRenderableGainMap && ImagePreloadCache.TryGetGainMapInputs(document.Path, modified, size, out var inputs))
+        {
+            var orientation = new ExifOrientationTransform(inputs.Primary.PixelWidth, inputs.Primary.PixelHeight, (int)inputs.Constants.Orientation.X);
+            return (double)orientation.Width / orientation.Height;
+        }
+        return ImagePreloadCache.TryGetBaseBitmap(document.Path, modified, size, out var bitmap)
+            ? (double)bitmap.PixelWidth / bitmap.PixelHeight : null;
+    }
+
     private static bool ShouldUseXamlColorManagedImage(HdrImageDocument document)
     {
         // Wide-gamut (Display P3 / BT.2020) SDR images must go through the D3D
@@ -807,7 +629,7 @@ public sealed partial class HomePage : Page
             && document.Format.Kind != HdrImageKind.SingleLayerHdr;
     }
 
-    private async Task LoadImagePathAsync(
+    private async Task<ImageLoadOutcome> LoadImagePathAsync(
         string path,
         bool invalidateRendererCache,
         IReadOnlyList<string>? explicitNavigationPaths = null,
@@ -823,10 +645,7 @@ public sealed partial class HomePage : Page
         CancelAndDispose(ref _folderRefreshCts);
         StopCompanionMediaPlayback(resetSource: true);
         ImageSurface.Visibility = Visibility.Visible;
-        _presentedImageWidth = 0.0;
-        _presentedImageHeight = 0.0;
-        ClearLayoutScrollOverride();
-        HideFallbackImageLayer();
+        StopZoomAnimation();
 
         var renderStatus = string.Empty;
         try
@@ -839,11 +658,29 @@ public sealed partial class HomePage : Page
             cancellationToken.ThrowIfCancellationRequested();
             if (!_imageLoads.IsCurrent(imageLoad))
             {
-                return;
+                return ImageLoadOutcome.Canceled;
             }
 
-            ViewModel.ApplyLoadResult(loadResult);
             var document = loadResult.Document;
+            var useXamlColorManagedImage = ShouldUseXamlColorManagedImage(document);
+            PreparedSdrFrame? preparedSdr = null;
+            // Decode before changing the visible document or its layout. The
+            // old frame remains intact while disk/native work is in flight.
+            if (useXamlColorManagedImage)
+                preparedSdr = await PrepareSdrFallbackImageAsync(path, CalculateViewerPreloadMaxPixelSize(), cancellationToken);
+            else
+                await ImagePreloadCache.PreloadAsync(path,
+                    DecoderCatalog.IsJpegXrExtension(Path.GetExtension(path)) ? null : CalculateViewerPreloadMaxPixelSize(),
+                    cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!_imageLoads.IsCurrent(imageLoad)) return ImageLoadOutcome.Canceled;
+            _preparedDisplayAspectRatio = preparedSdr is not null
+                ? (double)preparedSdr.Width / preparedSdr.Height
+                : GetPreparedDisplayAspectRatio(document);
+            _presentedImageWidth = 0;
+            _presentedImageHeight = 0;
+            ClearLayoutScrollOverride();
+            ViewModel.ApplyLoadResult(loadResult);
             _currentDocument = document;
             ResetViewerToolsForDocument();
             await UpdateHdrModeControlsForDocumentAsync(document, cancellationToken);
@@ -861,25 +698,20 @@ public sealed partial class HomePage : Page
             ResetZoomToFit();
             ResetInteractionScaleTransform();
             probeTimer.Stop();
-            var useXamlColorManagedImage = ShouldUseXamlColorManagedImage(document);
             if (!useXamlColorManagedImage)
             {
-                HideFallbackImageLayer();
+                HdrSwapChainHost.Visibility = Visibility.Visible;
+                _renderer.RestoreSwapChainPanelBinding();
             }
 
             var resizeTimer = Stopwatch.StartNew();
             UpdateImageSurfaceLayout();
-            if (!useXamlColorManagedImage)
-            {
-                await PresentViewportAsync(cancellationToken);
-            }
             resizeTimer.Stop();
 
             var renderTimer = Stopwatch.StartNew();
             if (useXamlColorManagedImage)
             {
-                await ShowSdrFallbackImageAsync(path, cancellationToken);
-                cancellationToken.ThrowIfCancellationRequested();
+                CommitSdrFallbackImage(preparedSdr!);
                 renderStatus = "SDR/ICC preview shown through WinUI Image color management; D3D decode skipped";
             }
             else
@@ -890,7 +722,14 @@ public sealed partial class HomePage : Page
                 }
 
                 var loadTimer = Stopwatch.StartNew();
-                await _renderer.LoadAsync(document, cancellationToken);
+                if (!TryGetSwapChainHostLayout(out var preparedLayout))
+                    throw new InvalidOperationException("图片显示区域尚未就绪。");
+                ApplySwapChainHostPlacement(preparedLayout);
+                if (!TryCreateRenderViewport(preparedLayout, out var preparedViewport))
+                    throw new InvalidOperationException("图片显示区域尺寸无效。");
+                // Submit the new image and its layout together, never redraw
+                // the old image into the next image's aspect ratio.
+                await _renderer.LoadAsync(document, preparedViewport, cancellationToken);
                 cancellationToken.ThrowIfCancellationRequested();
                 RememberPresentedImageSize();
                 loadTimer.Stop();
@@ -937,7 +776,7 @@ public sealed partial class HomePage : Page
 
             if (!_imageLoads.IsCurrent(imageLoad))
             {
-                return;
+                return ImageLoadOutcome.Canceled;
             }
 
             openTimer.Stop();
@@ -956,22 +795,22 @@ public sealed partial class HomePage : Page
             {
                 ViewModel.UpdateRenderStatus(renderStatus);
             }
+            return ImageLoadOutcome.Opened;
         }
         catch (OperationCanceledException)
         {
-            return;
+            return ImageLoadOutcome.Canceled;
         }
         catch (Exception ex)
         {
-            if (_imageLoads.IsCurrent(imageLoad))
-            {
-                ViewModel.UpdateRenderStatus($"打开失败: {ex.GetType().Name}: {ex.Message}");
-            }
+            if (!_imageLoads.IsCurrent(imageLoad)) return ImageLoadOutcome.Canceled;
+            ViewModel.UpdateRenderStatus($"无法打开 {Path.GetFileName(path)}: {ex.GetType().Name}: {ex.Message}");
 
-            return;
+            return ImageLoadOutcome.Failed;
         }
         finally
         {
+            if (_imageLoads.IsCurrent(imageLoad)) _preparedDisplayAspectRatio = null;
             _imageLoads.Complete(imageLoad);
         }
     }
@@ -1128,6 +967,12 @@ public sealed partial class HomePage : Page
             _filmstripViewportTimer?.Start();
     }
 
+    private void FilmstripThumbnail_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        if (FilmstripRow.Visibility == Visibility.Visible)
+            _filmstripViewportTimer?.Start();
+    }
+
     private void StopFilmstripThumbnailLoads()
     {
         _filmstripViewportTimer?.Stop();
@@ -1137,6 +982,7 @@ public sealed partial class HomePage : Page
     private void QueueVisibleFilmstripThumbnails()
     {
         if (!IsLoaded || FilmstripRow.Visibility != Visibility.Visible) return;
+        UpdateFilmstripChromeLayout();
         var panel = ImageFilmstrip.ItemsPanelRoot as ItemsStackPanel;
         _filmstripThumbnails.QueueLoads(_currentFolderIndex, panel?.FirstVisibleIndex ?? -1, panel?.LastVisibleIndex ?? -1);
     }
@@ -1173,7 +1019,16 @@ public sealed partial class HomePage : Page
 
         // The star column owns the available width. A guessed fixed width can
         // overflow its neighbors when the image counter grows or DPI changes.
-        FilmstripRow.MaxWidth = FilmstripItems.Count * FilmstripItemWidth + 4.0;
+        var filmstripWidth = 4.0;
+        foreach (var item in FilmstripItems)
+        {
+            // Four DIPs of item padding plus four DIPs of outer spacing.
+            filmstripWidth += item.PreviewWidth + 8.0;
+            // Larger collections already fill the toolbar; do not scan every
+            // item on each thumbnail resize or viewport update.
+            if (filmstripWidth >= overlayMaxWidth) break;
+        }
+        FilmstripRow.MaxWidth = Math.Min(filmstripWidth, overlayMaxWidth);
     }
 
     private async void ImageFilmstrip_ItemClick(object sender, ItemClickEventArgs e)
@@ -1367,8 +1222,7 @@ public sealed partial class HomePage : Page
             case VirtualKey.Number0 when isControlDown:
                 if (ViewModel.HasImage)
                 {
-                    ResetZoomToFit();
-                    await ApplyZoomAsync();
+                    AnimateZoomToMode(fill: false);
                 }
 
                 e.Handled = true;
@@ -1479,6 +1333,13 @@ public sealed partial class HomePage : Page
             return;
         }
 
+        if (_zoomRenderingAttached)
+        {
+            _targetZoomScale = _zoomScale;
+            StopZoomAnimation();
+            _zoomRenderCts?.Cancel();
+            EndSwapChainZoomPreview();
+        }
         _isPanning = true;
         _panHasMoved = false;
         _panPointerId = e.Pointer.PointerId;
@@ -1572,8 +1433,6 @@ public sealed partial class HomePage : Page
             return;
         }
 
-        _isFitZoom = false;
-        _isFillZoom = false;
         SetPendingZoomAnchorToViewportCenter();
         await ZoomByFactorAsync(scale, deferRender: true);
         e.Handled = true;
@@ -1586,8 +1445,6 @@ public sealed partial class HomePage : Page
             return;
         }
 
-        _isFitZoom = false;
-        _isFillZoom = false;
         SetPendingZoomAnchorToViewportCenter();
         await ZoomByFactorAsync(1.0 / 1.25, deferRender: true);
     }
@@ -1599,8 +1456,6 @@ public sealed partial class HomePage : Page
             return;
         }
 
-        _isFitZoom = false;
-        _isFillZoom = false;
         SetPendingZoomAnchorToViewportCenter();
         await ZoomByFactorAsync(1.25, deferRender: true);
     }
@@ -1635,10 +1490,14 @@ public sealed partial class HomePage : Page
                 }
             }
 
-            _isFitZoom = false;
-            _isFillZoom = false;
-            _zoomScale = CalculateActualSizeZoomScale();
-            await ApplyZoomAsync(cancellationToken);
+            if (document is not null && ShouldUseXamlColorManagedImage(document))
+            {
+                var original = await PrepareSdrFallbackImageAsync(document.Path, 0, cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
+                if (!ReferenceEquals(document, _currentDocument)) return;
+                CommitSdrFallbackImage(original);
+            }
+            AnimateZoomTo(CalculateActualSizeZoomScale());
             cancellationToken.ThrowIfCancellationRequested();
         }
         catch (OperationCanceledException)
@@ -1659,28 +1518,33 @@ public sealed partial class HomePage : Page
         }
     }
 
-    private async void ZoomFit_Click(object sender, RoutedEventArgs e)
-    {
-        if (!ViewModel.HasImage)
-        {
-            return;
-        }
+    private void ZoomFit_Click(object sender, RoutedEventArgs e) => AnimateZoomToMode(fill: false);
 
-        ResetZoomToFit();
-        await ApplyZoomAsync();
+    private void ZoomFill_Click(object sender, RoutedEventArgs e) => AnimateZoomToMode(fill: true);
+
+    private void AnimateZoomToMode(bool fill)
+    {
+        if (!ViewModel.HasImage || ImageSurface.Height <= 0 || PreviewSurface.ActualWidth <= 0 || PreviewSurface.ActualHeight <= 0) return;
+        var aspect = ImageSurface.Width / ImageSurface.Height;
+        var fitSize = ViewerViewportMath.CalculateFitSize(PreviewSurface.ActualWidth, PreviewSurface.ActualHeight, aspect);
+        var fillSize = ViewerViewportMath.CalculateFillSize(PreviewSurface.ActualWidth, PreviewSurface.ActualHeight, aspect);
+        AnimateZoomTo(fill ? fillSize.Width / fitSize.Width : 1, fit: !fill, fill: fill);
     }
 
-    private async void ZoomFill_Click(object sender, RoutedEventArgs e)
+    private void AnimateZoomTo(double target, bool fit = false, bool fill = false)
     {
-        if (!ViewModel.HasImage)
-        {
-            return;
-        }
-
-        _isFitZoom = false;
-        _isFillZoom = true;
-        _zoomScale = 1.0;
-        await ApplyZoomAsync();
+        if (!ViewModel.HasImage || ImageSurface.Height <= 0 || PreviewSurface.ActualWidth <= 0 || PreviewSurface.ActualHeight <= 0) return;
+        var fitSize = ViewerViewportMath.CalculateFitSize(PreviewSurface.ActualWidth, PreviewSurface.ActualHeight,
+            ImageSurface.Width / ImageSurface.Height);
+        var displayedScale = ImageSurface.Width / fitSize.Width;
+        var hasAnchor = TryCaptureViewportAnchor(out var x, out var y, out var viewportX, out var viewportY);
+        StopZoomAnimation();
+        _zoomScale = displayedScale;
+        _isFitZoom = _isFillZoom = false;
+        _zoomTargetFit = fit;
+        _zoomTargetFill = fill;
+        _targetZoomScale = target;
+        StartZoomAnimation(hasAnchor, x, y, viewportX, viewportY);
     }
 
     private void CropButton_Click(object sender, RoutedEventArgs e)
@@ -1816,6 +1680,13 @@ public sealed partial class HomePage : Page
 
     private async Task ZoomByFactorAsync(double factor, bool deferRender = false)
     {
+        _zoomTargetFit = _zoomTargetFill = false;
+        if ((_isFitZoom || _isFillZoom) && ImageSurface.Height > 0 && PreviewSurface.ActualWidth > 0 && PreviewSurface.ActualHeight > 0)
+        {
+            var fit = ViewerViewportMath.CalculateFitSize(PreviewSurface.ActualWidth, PreviewSurface.ActualHeight,
+                ImageSurface.Width / ImageSurface.Height);
+            _zoomScale = _targetZoomScale = ImageSurface.Width / fit.Width;
+        }
         _isFitZoom = false;
         _isFillZoom = false;
         var hasAnchor = TryConsumePendingZoomAnchor(
@@ -1849,45 +1720,66 @@ public sealed partial class HomePage : Page
         _zoomAnimationViewportX = anchorViewportX;
         _zoomAnimationViewportY = anchorViewportY;
         BeginSwapChainZoomPreview();
-        RunZoomAnimationStep();
-        _zoomAnimationTimer?.Start();
+        _zoomRetargetPending = true;
+        if (!_zoomRenderingAttached)
+        {
+            _zoomMotion.Reset(_zoomScale);
+            _zoomMotion.Retarget(_targetZoomScale, MotionClockMilliseconds);
+            _zoomRetargetPending = false;
+            CompositionTarget.Rendering += ZoomAnimation_Rendering;
+            _zoomRenderingAttached = true;
+        }
     }
 
     private void StopZoomAnimation()
     {
-        _zoomAnimationTimer?.Stop();
+        DetachZoomRendering();
         _hasZoomAnimationAnchor = false;
+        _zoomTargetFit = _zoomTargetFill = false;
+        _isZoomCommitInProgress = false;
+        _suppressSwapChainSizeChangedForZoom = false;
     }
 
-    private void ZoomAnimationTimer_Tick(Microsoft.UI.Dispatching.DispatcherQueueTimer sender, object args)
+    private static double MotionClockMilliseconds => Stopwatch.GetTimestamp() * 1000.0 / Stopwatch.Frequency;
+
+    private void DetachZoomRendering()
     {
-        if (RunZoomAnimationStep())
-        {
-            sender.Stop();
-        }
+        if (!_zoomRenderingAttached) return;
+        CompositionTarget.Rendering -= ZoomAnimation_Rendering;
+        _zoomRenderingAttached = false;
     }
 
-    private bool RunZoomAnimationStep()
+    private void ZoomAnimation_Rendering(object? sender, object args)
     {
         if (!ViewModel.HasImage || _lifetime.IsCancellationRequested)
         {
-            return true;
+            StopZoomAnimation();
+            return;
         }
-
-        var delta = _targetZoomScale - _zoomScale;
-        if (Math.Abs(delta) < 0.0025)
+        var now = MotionClockMilliseconds;
+        if (_zoomRetargetPending)
         {
-            _zoomScale = _targetZoomScale;
-            ApplyAnimatedZoomFrame();
-            _committedZoomScale = _zoomScale;
-            PreviewDeferredZoom();
-            QueueDeferredZoomRender();
-            return true;
+            _zoomMotion.Retarget(_targetZoomScale, now);
+            _zoomRetargetPending = false;
         }
-
-        _zoomScale += delta * ZoomAnimationCatchUp;
+        var complete = !_motionSettings.AnimationsEnabled || Visibility != Visibility.Visible
+            || _zoomMotion.IsComplete(now);
+        _zoomScale = complete ? _targetZoomScale : _zoomMotion.Sample(now);
         ApplyAnimatedZoomFrame();
-        return false;
+        if (complete)
+        {
+            DetachZoomRendering();
+            if (_zoomTargetFit || _zoomTargetFill)
+            {
+                _isFitZoom = _zoomTargetFit;
+                _isFillZoom = _zoomTargetFill;
+                _zoomScale = _targetZoomScale = 1;
+                _zoomTargetFit = _zoomTargetFill = false;
+                UpdateZoomControls();
+            }
+            _committedZoomScale = _zoomScale;
+            QueueDeferredZoomRender();
+        }
     }
 
     private void ApplyAnimatedZoomFrame()
@@ -1914,7 +1806,6 @@ public sealed partial class HomePage : Page
         try
         {
             ApplyImageSurfaceSize(targetWidth, targetHeight);
-            ImageScroller?.UpdateLayout();
         }
         finally
         {
@@ -1940,7 +1831,7 @@ public sealed partial class HomePage : Page
 
     private void QueueDeferredZoomRender()
     {
-        _zoomRenderCts?.Cancel();
+        CancelAndDispose(ref _zoomRenderCts);
         _zoomRenderCts = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token);
         var token = _zoomRenderCts.Token;
         _ = RenderZoomAfterInputSettlesAsync(token);
@@ -1963,9 +1854,13 @@ public sealed partial class HomePage : Page
             }
             finally
             {
-                EndSwapChainZoomPreview();
-                _isZoomCommitInProgress = false;
-                _suppressSwapChainSizeChangedForZoom = false;
+                // A canceled commit must not end a newer zoom gesture.
+                if (!cancellationToken.IsCancellationRequested)
+                {
+                    EndSwapChainZoomPreview();
+                    _isZoomCommitInProgress = false;
+                    _suppressSwapChainSizeChangedForZoom = false;
+                }
             }
 
             if (!cancellationToken.IsCancellationRequested)
@@ -2012,7 +1907,7 @@ public sealed partial class HomePage : Page
             : "适合";
     }
 
-    private async Task ApplyHdrPreviewOverrideAsync(CancellationToken cancellationToken = default)
+    private async Task ApplyHdrPreviewOverrideAsync(bool redraw = true, CancellationToken cancellationToken = default)
     {
         if (HdrPreviewModeSelector is null)
         {
@@ -2072,7 +1967,7 @@ public sealed partial class HomePage : Page
             _settings.ColorGamutMappingMode,
             displayConfiguration));
 
-        if (IsLoaded)
+        if (IsLoaded && redraw)
         {
             await PresentViewportAsync(effectiveCancellationToken);
             effectiveCancellationToken.ThrowIfCancellationRequested();
@@ -2135,7 +2030,7 @@ public sealed partial class HomePage : Page
         }
 
         UpdateSdrWhiteControls();
-        await ApplyHdrPreviewOverrideAsync(effectiveCancellationToken);
+        await ApplyHdrPreviewOverrideAsync(redraw: false, cancellationToken: effectiveCancellationToken);
         effectiveCancellationToken.ThrowIfCancellationRequested();
     }
 
@@ -2548,9 +2443,9 @@ public sealed partial class HomePage : Page
             return false;
         }
 
-        var contentAspectRatio = _useXamlFallbackLayoutAspectRatio
+        var contentAspectRatio = _preparedDisplayAspectRatio ?? (_useXamlFallbackLayoutAspectRatio
             ? _xamlFallbackDisplayAspectRatio
-            : _renderer.ContentDisplayAspectRatio;
+            : _renderer.ContentDisplayAspectRatio);
         if (contentAspectRatio is { } aspectRatio && aspectRatio > 0.0)
         {
             (targetWidth, targetHeight) = _isFillZoom
@@ -2602,7 +2497,7 @@ public sealed partial class HomePage : Page
         {
             Rect = new Windows.Foundation.Rect(0.0, 0.0, ImageSurface.Width, ImageSurface.Height)
         };
-        ImageSurface.UpdateLayout();
+        if (!_isZoomPreviewActive) ImageSurface.UpdateLayout();
         if (!_isZoomPreviewActive)
         {
             ApplySwapChainHostPlacement(targetWidth, targetHeight);
@@ -2615,15 +2510,16 @@ public sealed partial class HomePage : Page
     {
         var availableWidth = PreviewSurface.ActualWidth;
         var availableHeight = PreviewSurface.ActualHeight;
-        var aspectRatio = _renderer.ContentDisplayAspectRatio;
+        var isSdr = FallbackImage.Visibility == Visibility.Visible && _fallbackPixelHeight > 0;
+        var aspectRatio = isSdr ? (double)_fallbackPixelWidth / _fallbackPixelHeight : _renderer.ContentDisplayAspectRatio;
         if (availableWidth <= 0.0 || availableHeight <= 0.0 || aspectRatio is null or <= 0.0)
         {
             return 1.0;
         }
 
-        var contentWidth = _renderer.ContentPixelWidth;
-        var contentHeight = _renderer.ContentPixelHeight;
-        var orientationSwapsDimensions = Math.Abs(_renderer.ContentOrientation % 180.0f) is > 45.0f and < 135.0f;
+        var contentWidth = isSdr ? checked((int)_fallbackPixelWidth) : _renderer.ContentPixelWidth;
+        var contentHeight = isSdr ? checked((int)_fallbackPixelHeight) : _renderer.ContentPixelHeight;
+        var orientationSwapsDimensions = !isSdr && _renderer.ContentOrientation is >= 5 and <= 8;
         return ViewerViewportMath.CalculateActualSizeZoomScale(
             availableWidth,
             availableHeight,

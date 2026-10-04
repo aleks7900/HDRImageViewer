@@ -111,11 +111,10 @@
         <Style
             x:Key="FilmstripListViewItemStyle"
             TargetType="ListViewItem">
-            <Setter Property="Width" Value="84" />
             <Setter Property="Height" Value="60" />
             <Setter Property="MinWidth" Value="0" />
             <Setter Property="Margin" Value="2,0" />
-            <Setter Property="Padding" Value="0" />
+            <Setter Property="Padding" Value="2,0" />
             <Setter Property="HorizontalContentAlignment" Value="Stretch" />
             <Setter Property="VerticalContentAlignment" Value="Stretch" />
         </Style>
@@ -768,6 +767,9 @@
                 </Grid>
                 <Border
                     x:Name="PhotoToolbarOverlay"
+                    PointerEntered="ViewerChrome_PointerEntered"
+                    PointerExited="ViewerChrome_PointerExited"
+                    GotFocus="ViewerChrome_GotFocus"
                     MaxWidth="1180"
                     Margin="16,0,16,16"
                     Padding="12,8"
@@ -881,8 +883,9 @@
                                 <ListView.ItemTemplate>
                                     <DataTemplate x:DataType="presentation:FilmstripImageItem">
                                         <Grid
-                                            Width="80"
+                                            Width="{x:Bind PreviewWidth, Mode=OneWay}"
                                             Height="56"
+                                            SizeChanged="FilmstripThumbnail_SizeChanged"
                                             HorizontalAlignment="Center"
                                             VerticalAlignment="Center"
                                             ToolTipService.ToolTip="{x:Bind PreviewDescription, Mode=OneWay}">
@@ -1182,25 +1185,37 @@
                             </ComboBox>
                             <Grid
                                 x:Name="SdrWhitePanel"
-                                ColumnSpacing="8">
+                                ColumnSpacing="8"
+                                RowSpacing="8">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto" />
                                     <ColumnDefinition Width="*" />
                                 </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+                                <TextBlock
+                                    Grid.ColumnSpan="2"
+                                    Text="自定义参考白亮度"
+                                    TextWrapping="Wrap" />
                                 <ToggleSwitch
                                     x:Name="SdrWhiteOverrideToggle"
+                                    Grid.Row="1"
                                     AutomationProperties.AutomationId="SdrWhiteOverrideToggle"
                                     AutomationProperties.Name="自定义参考白亮度"
-                                    Header="自定义参考白亮度"
+                                    MinWidth="0"
                                     ToolTipService.ToolTip="参考白 = 内容漫反射白的目标亮度。203 nits = 绝对显示（与系统相册一致）；调低整体压暗，调高提亮。作用于单层 HDR（PQ/HLG）和 gain-map HDR。"
                                     IsOn="False"
                                     Toggled="SdrWhiteOverrideToggle_Toggled" />
                                 <TextBlock
                                     x:Name="SdrWhiteValueText"
+                                    Grid.Row="1"
                                     Grid.Column="1"
-                                    HorizontalAlignment="Right"
-                                    VerticalAlignment="Bottom"
+                                    VerticalAlignment="Center"
                                     Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                    TextAlignment="Right"
+                                    TextWrapping="Wrap"
                                     Text="绝对 203 nits" />
                             </Grid>
                             <Slider

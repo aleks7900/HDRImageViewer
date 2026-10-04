@@ -317,6 +317,9 @@ public sealed partial class D3D11HdrRenderPipeline : IHdrRenderPipeline, IDispos
         return LoadCoreAsync(document, fullResolution: false, cancellationToken);
     }
 
+    internal Task LoadAsync(HdrImageDocument document, HdrRenderViewport viewport, CancellationToken cancellationToken) =>
+        LoadCoreAsync(document, fullResolution: false, cancellationToken, viewport);
+
     public Task LoadFullResolutionAsync(HdrImageDocument document, CancellationToken cancellationToken)
     {
         return LoadCoreAsync(document, fullResolution: true, cancellationToken);
@@ -353,13 +356,24 @@ public sealed partial class D3D11HdrRenderPipeline : IHdrRenderPipeline, IDispos
     private async Task LoadCoreAsync(
         HdrImageDocument document,
         bool fullResolution,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        HdrRenderViewport? viewport = null)
     {
         await _renderOperationGate.WaitAsync(cancellationToken);
         try
         {
-            _document = document;
             cancellationToken.ThrowIfCancellationRequested();
+            if (viewport is { } target)
+            {
+                if (!target.IsValid) throw new ArgumentOutOfRangeException(nameof(viewport));
+                _renderImageLayout = target.ImageLayout;
+                EnsureDevice();
+                if (_swapChain is null) CreateSwapChain(target.PixelWidth, target.PixelHeight);
+                else if (_pixelWidth != target.PixelWidth || _pixelHeight != target.PixelHeight)
+                    ResizeSwapChain(target.PixelWidth, target.PixelHeight);
+                else ConfigureSwapChainPanelScale();
+            }
+            _document = document;
             if (document.HasRenderableGainMap && _swapChain is not null)
             {
                 await PresentGainMapFrameAsync(document, cancellationToken, fullResolution);

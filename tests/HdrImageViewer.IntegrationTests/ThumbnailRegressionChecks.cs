@@ -1,13 +1,44 @@
 using System.Buffers.Binary;
 using System.Numerics;
 using HdrImageViewer.Models;
+using HdrImageViewer.Presentation;
 using HdrImageViewer.Services;
 using Windows.Graphics.Imaging;
 
 internal static class ThumbnailRegressionChecks
 {
+    private static async Task VerifyFailedNavigationAsync(string validPath, string directory)
+    {
+        var unsupported = Path.Combine(directory, "unsupported.HDR");
+        var corrupt = Path.Combine(directory, "corrupt.png");
+        var header = System.Text.Encoding.ASCII.GetBytes("#?RADIANCE\nFORMAT=32-bit_rle_rgbe\n\n-Y 1 +X 2\n");
+        await File.WriteAllBytesAsync(unsupported, [.. header, 128, 128, 128, 129, 128, 128, 128, 129]);
+        await File.WriteAllTextAsync(corrupt, "invalid PNG fixture");
+        var attempts = new List<string>();
+        string? displayed = null;
+        var failures = await ImageNavigationContext.NavigateAsync(
+            [validPath, unsupported, corrupt, validPath], 0, 1, async path =>
+            {
+                attempts.Add(path);
+                try
+                {
+                    await ImagePreloadCache.PreloadAsync(path, 192);
+                    displayed = path;
+                    return ImageLoadOutcome.Opened;
+                }
+                catch (Exception)
+                {
+                    return ImageLoadOutcome.Failed;
+                }
+            }, CancellationToken.None);
+        if (failures.Count != 2 || attempts.Count != 3 || displayed != validPath)
+            throw new InvalidDataException("Real unsupported/corrupt files blocked navigation to the next valid image.");
+        Console.WriteLine("PASS file navigation: Radiance .HDR and corrupt PNG failed; following valid image decoded successfully");
+    }
+
     public static async Task RunAsync(string hdrSource, string directory)
     {
+        await VerifyFailedNavigationAsync(hdrSource, directory);
         var sdrPng = Path.Combine(directory, "transparent-srgb.png");
         var p3Png = Path.Combine(directory, "transparent-p3.png");
         var pqPng = Path.Combine(directory, "transparent-pq.png");
@@ -69,6 +100,11 @@ internal static class ThumbnailRegressionChecks
         }
 
         var hdr = await ImageDocumentLoader.LoadAsync(hdrSource);
+        await ImagePreloadCache.PreloadAsync(hdrSource, 192);
+        if (!ImagePreloadCache.TryGetBaseBitmap(hdrSource, File.GetLastWriteTimeUtc(hdrSource), 192, out var prepared)
+            || !prepared.IsHdrEncoded || Math.Max(prepared.PixelWidth, prepared.PixelHeight) > 192)
+            throw new InvalidDataException("Prepared HDR frame is unavailable for the viewer handoff.");
+        Console.WriteLine("PASS prepared HDR handoff: decoded frame ready in cache before presentation");
         var hdrThumbnail = await PhotoThumbnailService.DecodeDocumentThumbnailAsync(hdr.Document, 192, CancellationToken.None)
             ?? throw new InvalidDataException("HDR thumbnail route was skipped.");
         if (!hdrThumbnail.IsHdrEncoded || Math.Max(hdrThumbnail.PixelWidth, hdrThumbnail.PixelHeight) > 192)
@@ -260,6 +296,11 @@ internal static class ThumbnailRegressionChecks
     {
         var gainDocument = await ImageDocumentLoader.LoadAsync(gainPath);
         var inputs = await GainMapRenderInputDecoder.DecodeRenderInputsAsync(gainDocument.Document, 192);
+        await ImagePreloadCache.PreloadAsync(gainPath, 192);
+        if (!ImagePreloadCache.TryGetGainMapInputs(gainPath, File.GetLastWriteTimeUtc(gainPath), 192, out var prepared)
+            || !prepared.Primary.RgbaPixels.AsSpan().SequenceEqual(inputs.Primary.RgbaPixels)
+            || !prepared.GainMap.RgbaPixels.AsSpan().SequenceEqual(inputs.GainMap.RgbaPixels))
+            throw new InvalidDataException("Prepared gain-map pixels differ from the direct decoder.");
         var orientation = new ExifOrientationTransform(inputs.Primary.PixelWidth, inputs.Primary.PixelHeight, (int)inputs.Constants.Orientation.X);
         var oldGain = ThumbnailPixelConverter.ConvertGainMapToBgra8(inputs, CancellationToken.None);
         var basePreview = ThumbnailPixelConverter.ConvertGainMapBaseToBgra8(inputs, CancellationToken.None);
