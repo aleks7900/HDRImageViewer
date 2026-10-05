@@ -88,26 +88,49 @@ public sealed class MrtResourceLoadingTests
     [Fact]
     public void SystemDefaultClearsPrimaryLanguageOverrideTransition()
     {
-        // Step 1: Explicit language selection
-        Localization.ApplyLanguagePreference("ru-RU");
-        var activeOverride1 = Localization.GetAppliedLanguageOverride();
-        Assert.Equal("ru-RU", activeOverride1);
+        try
+        {
+            // Step 1: Explicit language selection (Russian)
+            Localization.ApplyLanguagePreference("ru-RU");
+            var activeOverride1 = Localization.GetAppliedLanguageOverride();
+            Assert.Equal("ru-RU", activeOverride1);
+            Assert.Equal("Сведения", Localization.GetString("InspectorTabDetails.Text"));
 
-        // Step 2: Simulate restart with explicit language
-        Localization.ApplyLanguagePreference("ru-RU");
-        var activeOverride2 = Localization.GetAppliedLanguageOverride();
-        Assert.Equal("ru-RU", activeOverride2);
+            // Step 2: Simulate restart with explicit language (Russian)
+            Localization.ApplyLanguagePreference("ru-RU");
+            var activeOverride2 = Localization.GetAppliedLanguageOverride();
+            Assert.Equal("ru-RU", activeOverride2);
+            Assert.Equal("Сведения", Localization.GetString("InspectorTabDetails.Text"));
 
-        // Step 3: User selects System default (empty string)
-        Localization.ApplyLanguagePreference(string.Empty);
-        var clearedOverride = Localization.GetAppliedLanguageOverride();
-        Assert.Equal(string.Empty, clearedOverride);
+            // Step 3: Explicit language selection (English)
+            Localization.ApplyLanguagePreference("en-US");
+            Assert.Equal("en-US", Localization.GetAppliedLanguageOverride());
+            Assert.Equal("Details", Localization.GetString("InspectorTabDetails.Text"));
 
-        // Step 4: Simulate restart with empty language from persisted settings
-        Localization.ApplyLanguagePreference(null);
-        var finalOverride = Localization.GetAppliedLanguageOverride();
-        Assert.Equal(string.Empty, finalOverride);
-        Assert.NotEqual("ru-RU", finalOverride);
+            // Step 4: Explicit language selection (Chinese)
+            Localization.ApplyLanguagePreference("zh-CN");
+            Assert.Equal("zh-CN", Localization.GetAppliedLanguageOverride());
+            Assert.Equal("详情", Localization.GetString("InspectorTabDetails.Text"));
+
+            // Step 5: User selects System default (empty string)
+            Localization.ApplyLanguagePreference(string.Empty);
+            var clearedOverride = Localization.GetAppliedLanguageOverride();
+            Assert.Equal(string.Empty, clearedOverride);
+
+            // Step 6: Simulate restart with empty language from persisted settings
+            Localization.ApplyLanguagePreference(null);
+            var finalOverride = Localization.GetAppliedLanguageOverride();
+            Assert.Equal(string.Empty, finalOverride);
+            Assert.NotEqual("ru-RU", finalOverride);
+
+            // Step 7: Verify resolved text resolves after clearing override
+            var clearedText = Localization.GetString("InspectorTabDetails.Text");
+            Assert.False(string.IsNullOrWhiteSpace(clearedText));
+        }
+        finally
+        {
+            Localization.ApplyLanguagePreference(string.Empty);
+        }
     }
 
     [Fact]
@@ -210,27 +233,37 @@ public sealed class MrtResourceLoadingTests
     [Fact]
     public void AppSettingsLanguagePersistenceAndLifecycleTransition()
     {
-        // 1. Initial / System default
-        AppSettingsService.SetLanguage(string.Empty);
-        Localization.ApplyLanguagePreference(AppSettingsService.Current.Language);
-        Assert.Equal(string.Empty, Localization.GetAppliedLanguageOverride());
+        try
+        {
+            // 1. Initial / System default
+            AppSettingsService.SetLanguage(string.Empty);
+            Localization.ApplyLanguagePreference(AppSettingsService.Current.Language);
+            Assert.Equal(string.Empty, Localization.GetAppliedLanguageOverride());
 
-        // 2. Select English
-        AppSettingsService.SetLanguage("en-US");
-        Localization.ApplyLanguagePreference(AppSettingsService.Current.Language);
-        Assert.Equal("en-US", Localization.GetAppliedLanguageOverride());
+            // 2. Select English
+            AppSettingsService.SetLanguage("en-US");
+            Localization.ApplyLanguagePreference(AppSettingsService.Current.Language);
+            Assert.Equal("en-US", Localization.GetAppliedLanguageOverride());
+            Assert.Equal("Details", Localization.GetString("InspectorTabDetails.Text"));
 
-        // 3. Select Russian
-        AppSettingsService.SetLanguage("ru-RU");
-        Localization.ApplyLanguagePreference(AppSettingsService.Current.Language);
-        Assert.Equal("ru-RU", Localization.GetAppliedLanguageOverride());
+            // 3. Select Russian
+            AppSettingsService.SetLanguage("ru-RU");
+            Localization.ApplyLanguagePreference(AppSettingsService.Current.Language);
+            Assert.Equal("ru-RU", Localization.GetAppliedLanguageOverride());
+            Assert.Equal("Сведения", Localization.GetString("InspectorTabDetails.Text"));
 
-        // 4. Return to System default
-        AppSettingsService.SetLanguage(string.Empty);
-        Localization.ApplyLanguagePreference(AppSettingsService.Current.Language);
-        Assert.Equal(string.Empty, Localization.GetAppliedLanguageOverride());
-        Assert.NotEqual("ru-RU", Localization.GetAppliedLanguageOverride());
-        Assert.NotEqual("en-US", Localization.GetAppliedLanguageOverride());
+            // 4. Return to System default
+            AppSettingsService.SetLanguage(string.Empty);
+            Localization.ApplyLanguagePreference(AppSettingsService.Current.Language);
+            Assert.Equal(string.Empty, Localization.GetAppliedLanguageOverride());
+            Assert.NotEqual("ru-RU", Localization.GetAppliedLanguageOverride());
+            Assert.NotEqual("en-US", Localization.GetAppliedLanguageOverride());
+        }
+        finally
+        {
+            AppSettingsService.SetLanguage(string.Empty);
+            Localization.ApplyLanguagePreference(string.Empty);
+        }
     }
 }
 

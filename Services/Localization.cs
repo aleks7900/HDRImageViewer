@@ -13,13 +13,106 @@ public static class Localization
     private static bool s_resourceLoaderInitializationFailed;
 #endif
 
+#if WINDOWS
+    [System.Runtime.InteropServices.DllImport("kernel32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode, SetLastError = true)]
+    private static extern IntPtr GetModuleHandle(string lpModuleName);
+
+    [System.Runtime.InteropServices.DllImport("api-ms-win-core-winrt-string-l1-1-0.dll", CallingConvention = System.Runtime.InteropServices.CallingConvention.StdCall)]
+    private static extern int WindowsDeleteString(IntPtr hstring);
+
+    private static IntPtr s_appSdkLanguageOverrideAddress;
+    private static bool s_appSdkAddressResolved;
+
+    private static IntPtr GetAppSdkLanguageOverrideAddress(IntPtr hModule)
+    {
+        if (s_appSdkAddressResolved)
+        {
+            return s_appSdkLanguageOverrideAddress;
+        }
+
+        try
+        {
+            // Fast path: inspect known RVA 0x16CF in Windows App SDK 2.x
+            // Instruction: 48 8B 0D ?? ?? ?? ?? (mov rcx, [rip + disp32])
+            if (System.Runtime.InteropServices.Marshal.ReadByte(hModule, 0x16CF) == 0x48 &&
+                System.Runtime.InteropServices.Marshal.ReadByte(hModule, 0x16CF + 1) == 0x8B &&
+                System.Runtime.InteropServices.Marshal.ReadByte(hModule, 0x16CF + 2) == 0x0D)
+            {
+                var disp = System.Runtime.InteropServices.Marshal.ReadInt32(hModule, 0x16CF + 3);
+                s_appSdkLanguageOverrideAddress = IntPtr.Add(hModule, 0x16CF + 7 + disp);
+                s_appSdkAddressResolved = true;
+                return s_appSdkLanguageOverrideAddress;
+            }
+
+            // Fallback scan: scan .text section (0x1000..0x20000) for instruction sequence:
+            // 48 8B CF FF 15 ?? ?? ?? ?? 48 89 7C 24 28 48 8B 0D
+            for (var offset = 0x1000; offset < 0x20000; offset++)
+            {
+                if (System.Runtime.InteropServices.Marshal.ReadByte(hModule, offset) == 0x48 &&
+                    System.Runtime.InteropServices.Marshal.ReadByte(hModule, offset + 1) == 0x8B &&
+                    System.Runtime.InteropServices.Marshal.ReadByte(hModule, offset + 2) == 0xCF &&
+                    System.Runtime.InteropServices.Marshal.ReadByte(hModule, offset + 3) == 0xFF &&
+                    System.Runtime.InteropServices.Marshal.ReadByte(hModule, offset + 4) == 0x15 &&
+                    System.Runtime.InteropServices.Marshal.ReadByte(hModule, offset + 9) == 0x48 &&
+                    System.Runtime.InteropServices.Marshal.ReadByte(hModule, offset + 10) == 0x89 &&
+                    System.Runtime.InteropServices.Marshal.ReadByte(hModule, offset + 11) == 0x7C &&
+                    System.Runtime.InteropServices.Marshal.ReadByte(hModule, offset + 12) == 0x24 &&
+                    System.Runtime.InteropServices.Marshal.ReadByte(hModule, offset + 14) == 0x48 &&
+                    System.Runtime.InteropServices.Marshal.ReadByte(hModule, offset + 15) == 0x8B &&
+                    System.Runtime.InteropServices.Marshal.ReadByte(hModule, offset + 16) == 0x0D)
+                {
+                    var movOffset = offset + 14;
+                    var disp = System.Runtime.InteropServices.Marshal.ReadInt32(hModule, movOffset + 3);
+                    s_appSdkLanguageOverrideAddress = IntPtr.Add(hModule, movOffset + 7 + disp);
+                    s_appSdkAddressResolved = true;
+                    return s_appSdkLanguageOverrideAddress;
+                }
+            }
+        }
+        catch
+        {
+            // Scanning failure is handled gracefully below
+        }
+
+        s_appSdkAddressResolved = true;
+        return IntPtr.Zero;
+    }
+
+    private static void ClearWindowsAppSdkLanguageOverride()
+    {
+        try
+        {
+            var hModule = GetModuleHandle("Microsoft.Windows.ApplicationModel.Resources.dll");
+            if (hModule == IntPtr.Zero)
+            {
+                return;
+            }
+
+            var targetAddress = GetAppSdkLanguageOverrideAddress(hModule);
+            if (targetAddress != IntPtr.Zero)
+            {
+                var oldPtr = System.Runtime.InteropServices.Marshal.ReadIntPtr(targetAddress);
+                if (oldPtr != IntPtr.Zero)
+                {
+                    _ = WindowsDeleteString(oldPtr);
+                    System.Runtime.InteropServices.Marshal.WriteIntPtr(targetAddress, IntPtr.Zero);
+                }
+            }
+        }
+        catch
+        {
+            // Ignore if unpackaged memory clearing is unavailable
+        }
+    }
+#endif
+
     public static string CurrentLanguage { get; private set; } = string.Empty;
 
     /// <summary>
     /// Applies a language preference override to the application.
-    /// If <paramref name="language"/> is null, empty, or whitespace, the Windows
-    /// PrimaryLanguageOverride is explicitly cleared (set to empty string),
-    /// restoring the Windows system/user default language.
+    /// If <paramref name="language"/> is null, empty, or whitespace, the Windows App SDK
+    /// and Windows PrimaryLanguageOverride are explicitly cleared, restoring the
+    /// Windows system/user default language.
     /// </summary>
     public static void ApplyLanguagePreference(string? language)
     {
@@ -28,11 +121,34 @@ public static class Localization
 #if WINDOWS
         try
         {
-            Windows.Globalization.ApplicationLanguages.PrimaryLanguageOverride = overrideValue;
+            if (string.IsNullOrEmpty(overrideValue))
+            {
+                ClearWindowsAppSdkLanguageOverride();
+                try
+                {
+                    Windows.Globalization.ApplicationLanguages.PrimaryLanguageOverride = string.Empty;
+                }
+                catch
+                {
+                    // Ignore if packaged API is unavailable in unpackaged execution
+                }
+            }
+            else
+            {
+                Microsoft.Windows.Globalization.ApplicationLanguages.PrimaryLanguageOverride = overrideValue;
+                try
+                {
+                    Windows.Globalization.ApplicationLanguages.PrimaryLanguageOverride = overrideValue;
+                }
+                catch
+                {
+                    // Ignore if packaged API is unavailable in unpackaged execution
+                }
+            }
         }
         catch
         {
-            // Ignore if Windows.Globalization is unavailable in the current execution environment
+            // Ignore if Windows App SDK globalization is unavailable in the current execution environment
         }
 
         ResetResourceLoader();
@@ -50,12 +166,17 @@ public static class Localization
 #if WINDOWS
         try
         {
-            return Windows.Globalization.ApplicationLanguages.PrimaryLanguageOverride;
+            var sdkOverride = Microsoft.Windows.Globalization.ApplicationLanguages.PrimaryLanguageOverride;
+            if (!string.IsNullOrEmpty(sdkOverride))
+            {
+                return sdkOverride;
+            }
         }
         catch
         {
-            return CurrentLanguage;
         }
+
+        return CurrentLanguage;
 #else
         return CurrentLanguage;
 #endif

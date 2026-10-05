@@ -49,11 +49,16 @@ internal static class MrtLocalizationRegressionChecks
         }
         Console.WriteLine("[3] Non-poisoning verification passed: missing key did not disable ResourceLoader");
 
-        // 3. PrimaryLanguageOverride state transition
+        // 3. PrimaryLanguageOverride state transition and resolved text lookup
         Localization.ApplyLanguagePreference("ru-RU");
         if (Localization.GetAppliedLanguageOverride() != "ru-RU")
         {
             throw new InvalidOperationException("PrimaryLanguageOverride was not set to ru-RU");
+        }
+        var ruResolved = Localization.GetString("InspectorTabDetails.Text");
+        if (ruResolved != "Сведения")
+        {
+            throw new InvalidOperationException($"Expected 'Сведения' for ru-RU override but got '{ruResolved}'");
         }
 
         // Simulate restart with explicit language
@@ -61,6 +66,22 @@ internal static class MrtLocalizationRegressionChecks
         if (Localization.GetAppliedLanguageOverride() != "ru-RU")
         {
             throw new InvalidOperationException("Simulated restart failed to retain ru-RU");
+        }
+        if (Localization.GetString("InspectorTabDetails.Text") != "Сведения")
+        {
+            throw new InvalidOperationException("Resolved text did not remain 'Сведения' after simulated restart");
+        }
+
+        // Explicit language selection: English
+        Localization.ApplyLanguagePreference("en-US");
+        if (Localization.GetAppliedLanguageOverride() != "en-US")
+        {
+            throw new InvalidOperationException("PrimaryLanguageOverride was not set to en-US");
+        }
+        var enResolved = Localization.GetString("InspectorTabDetails.Text");
+        if (enResolved != "Details")
+        {
+            throw new InvalidOperationException($"Expected 'Details' for en-US override but got '{enResolved}'");
         }
 
         // Select System default
@@ -76,7 +97,12 @@ internal static class MrtLocalizationRegressionChecks
         {
             throw new InvalidOperationException("Simulated restart failed to keep System default cleared");
         }
-        Console.WriteLine("[4] PrimaryLanguageOverride state transition verified: System default correctly cleared override");
+        var defaultResolved = Localization.GetString("InspectorTabDetails.Text");
+        if (string.IsNullOrWhiteSpace(defaultResolved))
+        {
+            throw new InvalidOperationException("Resolved text was empty after clearing override to System default");
+        }
+        Console.WriteLine("[4] PrimaryLanguageOverride state transition verified: resolved text and override verified");
 
         // 4. Multi-language resolution from PRI
         var manager = new Microsoft.Windows.ApplicationModel.Resources.ResourceManager(priPath);
