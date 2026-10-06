@@ -49,60 +49,66 @@ internal static class MrtLocalizationRegressionChecks
         }
         Console.WriteLine("[3] Non-poisoning verification passed: missing key did not disable ResourceLoader");
 
-        // 3. PrimaryLanguageOverride state transition and resolved text lookup
-        Localization.ApplyLanguagePreference("ru-RU");
-        if (Localization.GetAppliedLanguageOverride() != "ru-RU")
+        // 3. Restart boundary and PrimaryLanguageOverride verification across separate fresh processes
+        Console.WriteLine("[4] Testing restart boundary across separate processes...");
+        var originalLanguage = AppSettingsService.Current.Language;
+        try
         {
-            throw new InvalidOperationException("PrimaryLanguageOverride was not set to ru-RU");
-        }
-        var ruResolved = Localization.GetString("InspectorTabDetails.Text");
-        if (ruResolved != "Сведения")
-        {
-            throw new InvalidOperationException($"Expected 'Сведения' for ru-RU override but got '{ruResolved}'");
-        }
+            // Step 3a: Capture no-override baseline in a fresh process
+            AppSettingsService.SetLanguage(string.Empty);
+            var (baselineText, baselineOverride) = RunProbe("InspectorTabDetails.Text");
+            if (baselineOverride != string.Empty)
+            {
+                throw new InvalidOperationException($"Expected empty override for baseline, got '{baselineOverride}'");
+            }
+            if (string.IsNullOrWhiteSpace(baselineText))
+            {
+                throw new InvalidOperationException("Baseline text lookup returned empty string");
+            }
+            Console.WriteLine($"    Baseline (no-override): override='{baselineOverride}', text='{baselineText}'");
 
-        // Simulate restart with explicit language
-        Localization.ApplyLanguagePreference("ru-RU");
-        if (Localization.GetAppliedLanguageOverride() != "ru-RU")
-        {
-            throw new InvalidOperationException("Simulated restart failed to retain ru-RU");
-        }
-        if (Localization.GetString("InspectorTabDetails.Text") != "Сведения")
-        {
-            throw new InvalidOperationException("Resolved text did not remain 'Сведения' after simulated restart");
-        }
+            // Step 3b: Select an explicit language differing from baseline and verify after restart
+            var explicitLang = string.Equals(baselineText, "Details", StringComparison.Ordinal) ? "ru-RU" : "en-US";
+            var expectedExplicitText = string.Equals(explicitLang, "ru-RU", StringComparison.Ordinal) ? "Сведения" : "Details";
 
-        // Explicit language selection: English
-        Localization.ApplyLanguagePreference("en-US");
-        if (Localization.GetAppliedLanguageOverride() != "en-US")
-        {
-            throw new InvalidOperationException("PrimaryLanguageOverride was not set to en-US");
-        }
-        var enResolved = Localization.GetString("InspectorTabDetails.Text");
-        if (enResolved != "Details")
-        {
-            throw new InvalidOperationException($"Expected 'Details' for en-US override but got '{enResolved}'");
-        }
+            AppSettingsService.SetLanguage(explicitLang);
+            var (explicitText, explicitOverride) = RunProbe("InspectorTabDetails.Text");
+            if (explicitOverride != explicitLang)
+            {
+                throw new InvalidOperationException($"Expected override '{explicitLang}', got '{explicitOverride}'");
+            }
+            if (explicitText != expectedExplicitText)
+            {
+                throw new InvalidOperationException($"Expected text '{expectedExplicitText}' after restart, got '{explicitText}'");
+            }
+            if (explicitText == baselineText)
+            {
+                throw new InvalidOperationException($"Explicit text '{explicitText}' should differ from baseline '{baselineText}'");
+            }
+            Console.WriteLine($"    Explicit language '{explicitLang}' after restart: override='{explicitOverride}', text='{explicitText}'");
 
-        // Select System default
-        Localization.ApplyLanguagePreference(string.Empty);
-        if (Localization.GetAppliedLanguageOverride() != string.Empty)
-        {
-            throw new InvalidOperationException("PrimaryLanguageOverride was not cleared when switching to System default");
+            // Step 3c: Select System default and verify baseline restoration after restart
+            AppSettingsService.SetLanguage(string.Empty);
+            var (restoredText, restoredOverride) = RunProbe("InspectorTabDetails.Text");
+            if (restoredOverride != string.Empty)
+            {
+                throw new InvalidOperationException($"Expected empty override after restoring System default, got '{restoredOverride}'");
+            }
+            if (restoredText != baselineText)
+            {
+                throw new InvalidOperationException($"Restored text '{restoredText}' did not match baseline '{baselineText}'");
+            }
+            if (restoredText == explicitText)
+            {
+                throw new InvalidOperationException($"Restored text '{restoredText}' is still showing explicit language text '{explicitText}'");
+            }
+            Console.WriteLine($"    Restored baseline after restart: override='{restoredOverride}', text='{restoredText}'");
+            Console.WriteLine("[4] Restart boundary state transition verified across separate processes");
         }
-
-        // Simulate restart with System default
-        Localization.ApplyLanguagePreference(null);
-        if (Localization.GetAppliedLanguageOverride() != string.Empty)
+        finally
         {
-            throw new InvalidOperationException("Simulated restart failed to keep System default cleared");
+            AppSettingsService.SetLanguage(originalLanguage);
         }
-        var defaultResolved = Localization.GetString("InspectorTabDetails.Text");
-        if (string.IsNullOrWhiteSpace(defaultResolved))
-        {
-            throw new InvalidOperationException("Resolved text was empty after clearing override to System default");
-        }
-        Console.WriteLine("[4] PrimaryLanguageOverride state transition verified: resolved text and override verified");
 
         // 4. Multi-language resolution from PRI
         var manager = new Microsoft.Windows.ApplicationModel.Resources.ResourceManager(priPath);
@@ -139,5 +145,95 @@ internal static class MrtLocalizationRegressionChecks
 
         Console.WriteLine("=== All Windows MRT / PRI Resource Checks Passed Successfully ===");
         return Task.CompletedTask;
+    }
+
+    private static string FindIntegrationTestsExecutable()
+    {
+        if (!string.IsNullOrEmpty(Environment.ProcessPath) &&
+            File.Exists(Environment.ProcessPath) &&
+            File.Exists(Path.ChangeExtension(Environment.ProcessPath, ".dll")))
+        {
+            return Environment.ProcessPath;
+        }
+
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null)
+        {
+            var candidateDebug = Path.Combine(dir.FullName, "tests", "HdrImageViewer.IntegrationTests", "bin", "Debug", "net10.0-windows10.0.26100.0", "win-x64", "HdrImageViewer.IntegrationTests.exe");
+            if (File.Exists(candidateDebug) && File.Exists(Path.ChangeExtension(candidateDebug, ".dll")))
+            {
+                return candidateDebug;
+            }
+
+            var candidateRelease = Path.Combine(dir.FullName, "tests", "HdrImageViewer.IntegrationTests", "bin", "Release", "net10.0-windows10.0.26100.0", "win-x64", "HdrImageViewer.IntegrationTests.exe");
+            if (File.Exists(candidateRelease) && File.Exists(Path.ChangeExtension(candidateRelease, ".dll")))
+            {
+                return candidateRelease;
+            }
+
+            var siblingDebug = Path.Combine(dir.FullName, "HdrImageViewer.IntegrationTests", "bin", "Debug", "net10.0-windows10.0.26100.0", "win-x64", "HdrImageViewer.IntegrationTests.exe");
+            if (File.Exists(siblingDebug) && File.Exists(Path.ChangeExtension(siblingDebug, ".dll")))
+            {
+                return siblingDebug;
+            }
+
+            var local = Path.Combine(dir.FullName, "HdrImageViewer.IntegrationTests.exe");
+            if (File.Exists(local) && File.Exists(Path.ChangeExtension(local, ".dll")))
+            {
+                return local;
+            }
+
+            dir = dir.Parent;
+        }
+
+        throw new FileNotFoundException("HdrImageViewer.IntegrationTests.exe with matching dll was not found.");
+    }
+
+    private static (string text, string appliedOverride) RunProbe(string key, string? languageOverride = null)
+    {
+        var exe = FindIntegrationTestsExecutable();
+        var arguments = languageOverride is null
+            ? $"--probe-resource \"{key}\" --use-settings"
+            : $"--probe-resource \"{key}\" \"{languageOverride}\"";
+
+        using var process = new System.Diagnostics.Process();
+        process.StartInfo = new System.Diagnostics.ProcessStartInfo
+        {
+            FileName = exe,
+            Arguments = arguments,
+            WorkingDirectory = Path.GetDirectoryName(exe)!,
+            StandardOutputEncoding = System.Text.Encoding.UTF8,
+            StandardErrorEncoding = System.Text.Encoding.UTF8,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+        };
+
+        process.Start();
+        var stdout = process.StandardOutput.ReadToEnd();
+        var stderr = process.StandardError.ReadToEnd();
+        process.WaitForExit(15000);
+
+        if (process.ExitCode != 0)
+        {
+            throw new InvalidOperationException($"Probe process failed (code {process.ExitCode}): {stderr}\n{stdout}");
+        }
+
+        string text = string.Empty;
+        string appliedOverride = string.Empty;
+        foreach (var line in stdout.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (line.StartsWith("TEXT="))
+            {
+                text = line["TEXT=".Length..];
+            }
+            else if (line.StartsWith("OVERRIDE="))
+            {
+                appliedOverride = line["OVERRIDE=".Length..];
+            }
+        }
+
+        return (text, appliedOverride);
     }
 }

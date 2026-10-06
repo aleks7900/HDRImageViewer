@@ -93,7 +93,6 @@ public sealed partial class SettingsPage : Page
             if (!string.Equals(AppSettingsService.Current.Language, langTag, StringComparison.OrdinalIgnoreCase))
             {
                 AppSettingsService.SetLanguage(langTag);
-                Localization.ApplyLanguagePreference(langTag);
                 LanguageRestartInfoBar.IsOpen = true;
             }
         }
