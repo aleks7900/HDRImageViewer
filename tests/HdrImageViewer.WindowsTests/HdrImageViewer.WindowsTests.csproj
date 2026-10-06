@@ -27,4 +27,31 @@
     <ProjectReference Include="..\HdrImageViewer.IntegrationTests\HdrImageViewer.IntegrationTests.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>IntegrationTestsProbeDir</_Parameter1>
+      <_Parameter2>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\HdrImageViewer.IntegrationTests\bin\$(Platform)\$(Configuration)\$(TargetFramework)\$(RuntimeIdentifier)'))</_Parameter2>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>IntegrationTestsProbeDirNoPlatform</_Parameter1>
+      <_Parameter2>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\HdrImageViewer.IntegrationTests\bin\$(Configuration)\$(TargetFramework)\$(RuntimeIdentifier)'))</_Parameter2>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>BuildConfiguration</_Parameter1>
+      <_Parameter2>$(Configuration)</_Parameter2>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>BuildPlatform</_Parameter1>
+      <_Parameter2>$(Platform)</_Parameter2>
+    </AssemblyAttribute>
+  </ItemGroup>
+
+  <Target Name="CopyIntegrationTestsProbeOutput" AfterTargets="Build">
+    <ItemGroup>
+      <_ProbeFiles Include="$(MSBuildThisFileDirectory)..\HdrImageViewer.IntegrationTests\bin\$(Platform)\$(Configuration)\$(TargetFramework)\$(RuntimeIdentifier)\*.*" Condition="Exists('$(MSBuildThisFileDirectory)..\HdrImageViewer.IntegrationTests\bin\$(Platform)\$(Configuration)\$(TargetFramework)\$(RuntimeIdentifier)\HdrImageViewer.IntegrationTests.exe')" />
+      <_ProbeFiles Include="$(MSBuildThisFileDirectory)..\HdrImageViewer.IntegrationTests\bin\$(Configuration)\$(TargetFramework)\$(RuntimeIdentifier)\*.*" Condition="!Exists('$(MSBuildThisFileDirectory)..\HdrImageViewer.IntegrationTests\bin\$(Platform)\$(Configuration)\$(TargetFramework)\$(RuntimeIdentifier)\HdrImageViewer.IntegrationTests.exe') and Exists('$(MSBuildThisFileDirectory)..\HdrImageViewer.IntegrationTests\bin\$(Configuration)\$(TargetFramework)\$(RuntimeIdentifier)\HdrImageViewer.IntegrationTests.exe')" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_ProbeFiles)" DestinationFolder="$(TargetDir)Probe" SkipUnchangedFiles="true" Condition="'@(_ProbeFiles)' != ''" />
+  </Target>
+
 </Project>

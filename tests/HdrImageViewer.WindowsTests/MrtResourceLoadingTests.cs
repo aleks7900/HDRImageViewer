@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Reflection;
 using HdrImageViewer.Services;
 using Xunit;
 
@@ -257,33 +258,100 @@ public sealed class MrtResourceLoadingTests
         }
     }
 
+#if DEBUG
+    private const string CurrentConfiguration = "Debug";
+    private const string AlternateConfiguration = "Release";
+#else
+    private const string CurrentConfiguration = "Release";
+    private const string AlternateConfiguration = "Debug";
+#endif
+
+    private static string? GetAssemblyMetadata(string key)
+    {
+        return typeof(MrtResourceLoadingTests).Assembly
+            .GetCustomAttributes<System.Reflection.AssemblyMetadataAttribute>()
+            .FirstOrDefault(a => a.Key == key)?.Value;
+    }
+
+    private static bool IsValidProbe(string? exePath)
+    {
+        return !string.IsNullOrEmpty(exePath) &&
+               File.Exists(exePath) &&
+               File.Exists(Path.ChangeExtension(exePath, ".dll"));
+    }
+
     private static string FindIntegrationTestsExecutable()
     {
+        // 1. Check local Probe or IntegrationTests subfolder (copied by MSBuild target)
+        var localProbe = Path.Combine(AppContext.BaseDirectory, "Probe", "HdrImageViewer.IntegrationTests.exe");
+        if (IsValidProbe(localProbe))
+        {
+            return localProbe;
+        }
+
+        var localSubdir = Path.Combine(AppContext.BaseDirectory, "IntegrationTests", "HdrImageViewer.IntegrationTests.exe");
+        if (IsValidProbe(localSubdir))
+        {
+            return localSubdir;
+        }
+
+        var localBase = Path.Combine(AppContext.BaseDirectory, "HdrImageViewer.IntegrationTests.exe");
+        if (IsValidProbe(localBase))
+        {
+            return localBase;
+        }
+
+        // 2. Check path passed via MSBuild assembly metadata
+        var metadataDir = GetAssemblyMetadata("IntegrationTestsProbeDir");
+        if (!string.IsNullOrEmpty(metadataDir))
+        {
+            var metadataExe = Path.Combine(metadataDir, "HdrImageViewer.IntegrationTests.exe");
+            if (IsValidProbe(metadataExe))
+            {
+                return metadataExe;
+            }
+        }
+
+        var metadataNoPlatformDir = GetAssemblyMetadata("IntegrationTestsProbeDirNoPlatform");
+        if (!string.IsNullOrEmpty(metadataNoPlatformDir))
+        {
+            var metadataNoPlatformExe = Path.Combine(metadataNoPlatformDir, "HdrImageViewer.IntegrationTests.exe");
+            if (IsValidProbe(metadataNoPlatformExe))
+            {
+                return metadataNoPlatformExe;
+            }
+        }
+
+        // 3. Search directory tree prioritizing the active build configuration (Release/Debug) and x64 layout
+        var configurations = new[] { CurrentConfiguration, AlternateConfiguration };
+        var platforms = new[] { "x64", "" };
+        const string tfmRid = "net10.0-windows10.0.26100.0\\win-x64";
+
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
         while (dir != null)
         {
-            var candidateDebug = Path.Combine(dir.FullName, "tests", "HdrImageViewer.IntegrationTests", "bin", "Debug", "net10.0-windows10.0.26100.0", "win-x64", "HdrImageViewer.IntegrationTests.exe");
-            if (File.Exists(candidateDebug) && File.Exists(Path.ChangeExtension(candidateDebug, ".dll")))
+            foreach (var config in configurations)
             {
-                return candidateDebug;
-            }
+                foreach (var platform in platforms)
+                {
+                    var relativeParts = string.IsNullOrEmpty(platform)
+                        ? new[] { "bin", config, tfmRid, "HdrImageViewer.IntegrationTests.exe" }
+                        : new[] { "bin", platform, config, tfmRid, "HdrImageViewer.IntegrationTests.exe" };
 
-            var candidateRelease = Path.Combine(dir.FullName, "tests", "HdrImageViewer.IntegrationTests", "bin", "Release", "net10.0-windows10.0.26100.0", "win-x64", "HdrImageViewer.IntegrationTests.exe");
-            if (File.Exists(candidateRelease) && File.Exists(Path.ChangeExtension(candidateRelease, ".dll")))
-            {
-                return candidateRelease;
-            }
+                    // Under tests/HdrImageViewer.IntegrationTests/
+                    var candidate = Path.Combine([dir.FullName, "tests", "HdrImageViewer.IntegrationTests", .. relativeParts]);
+                    if (IsValidProbe(candidate))
+                    {
+                        return candidate;
+                    }
 
-            var siblingDebug = Path.Combine(dir.FullName, "HdrImageViewer.IntegrationTests", "bin", "Debug", "net10.0-windows10.0.26100.0", "win-x64", "HdrImageViewer.IntegrationTests.exe");
-            if (File.Exists(siblingDebug) && File.Exists(Path.ChangeExtension(siblingDebug, ".dll")))
-            {
-                return siblingDebug;
-            }
-
-            var local = Path.Combine(dir.FullName, "HdrImageViewer.IntegrationTests.exe");
-            if (File.Exists(local) && File.Exists(Path.ChangeExtension(local, ".dll")))
-            {
-                return local;
+                    // Sibling HdrImageViewer.IntegrationTests/
+                    var sibling = Path.Combine([dir.FullName, "HdrImageViewer.IntegrationTests", .. relativeParts]);
+                    if (IsValidProbe(sibling))
+                    {
+                        return sibling;
+                    }
+                }
             }
 
             dir = dir.Parent;
